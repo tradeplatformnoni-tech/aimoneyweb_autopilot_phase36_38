@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aimoneyweb-canary
+  namespace: aimoney
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aimoneyweb
+      track: canary
+  template:
+    metadata:
+      labels:
+        app: aimoneyweb
+        track: canary
+    spec:
+      containers:
+      - name: app
+        image: ghcr.io/OWNER/aimoneyweb:canary
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: PORT
+          value: "8000"
+        ports:
+        - containerPort: 8000
+        readinessProbe:
+          httpGet: { path: "/", port: 8000 }
+          initialDelaySeconds: 3
+          periodSeconds: 5
+        livenessProbe:
+          httpGet: { path: "/", port: 8000 }
+          initialDelaySeconds: 10
+          periodSeconds: 10

@@ -1,0 +1,54 @@
+from fastapi import FastAPI, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+import os,asyncio,random
+from dotenv import load_dotenv; load_dotenv()
+from ai.brokers.router import account_equity_cash, submit_market
+from ai.strategy_manager import pick as pick_strategy
+from ai.risk.var_calc import value_at_risk
+from ai.sentiment.feed import sentiment_boost
+from ai.agents.coordinator import agent_votes
+from ai.agents.sentinel import guard
+from ai.agents.arbitrator import arbitrate
+from ai.agents.forecast import forecast_pnl
+from ai.sync.cloudsync import push_state
+
+app=FastAPI(title="AI Money Web Autonomy (Phases 69–75)")
+app.add_middleware(CORSMiddleware,allow_origins=["*"],allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
+
+EQUITY_HISTORY=[]
+
+@app.get("/")
+def root(): return {"message":"✅ AI Autonomy Engine Online (69–75)"}
+
+@app.get("/api/status")
+def status():
+    return {"samples":len(EQUITY_HISTORY)}
+
+@app.websocket("/ws/autopilot")
+async def ws(ws:WebSocket):
+    await ws.accept()
+    while True:
+        eq,ca=account_equity_cash()
+        EQUITY_HISTORY.append(eq)
+        pnl=(eq-100000)/100000
+        dd=abs(pnl)*random.uniform(0.5,1.2)
+        var=value_at_risk([pnl])
+        sent=sentiment_boost("AAPL")
+
+        decision,votes=agent_votes(pnl,dd,var,sent)
+        arb=arbitrate(votes, fallback=random.choice([-1,1]))
+        total_signal=guard(decision+arb, var, dd)
+        forecast=forecast_pnl(EQUITY_HISTORY[-60:])
+        side="buy" if total_signal>0 else "sell"
+        submit_market("AAPL", side, 1)
+        push_state({"eq":eq,"var":var,"sent":sent,"signal":total_signal,"forecast":forecast})
+        await ws.send_json({
+            "eq":eq,"signal":total_signal,"var":var,"dd":dd,
+            "sent":sent,"forecast":forecast,"votes":votes
+        })
+        await asyncio.sleep(5)
+
+@app.get("/dashboard",response_class=HTMLResponse)
+def dash():
+    return HTMLResponse(open("static/dashboard.html").read())

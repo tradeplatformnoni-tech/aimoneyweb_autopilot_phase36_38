@@ -1,0 +1,36 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>AI Money Web :: K8s Canary (151–160)</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+ body{background:#0d1117;color:#fff;font-family:system-ui;margin:0;padding:24px}
+ h1{margin:0 0 8px;color:#00ffc8}
+ canvas{max-width:960px;width:100%;height:360px}
+ .row{display:flex;gap:16px;flex-wrap:wrap}
+ .card{background:#111826;border:1px solid #223146;border-radius:12px;padding:16px;flex:1;min-width:260px}
+</style></head>
+<body>
+<h1>🚀 AI Money Web :: K8s Canary</h1>
+<div class="row">
+  <div class="card">
+    <div>Status: <span id="status">Connecting…</span></div>
+    <div>Signal: <span id="signal">—</span></div>
+    <div>VaR: <span id="var">—</span></div>
+  </div>
+</div>
+<canvas id="chart"></canvas>
+<script>
+const ws=new WebSocket("ws://"+location.host+"/ws/live");
+const ctx=document.getElementById("chart").getContext("2d");
+const data={labels:[],datasets:[{label:"Equity",data:[],borderColor:"#00ffc8",fill:false}]};
+const chart=new Chart(ctx,{type:"line",data});
+ws.onmessage=e=>{
+ const j=JSON.parse(e.data);
+ document.getElementById("status").innerText="OK";
+ document.getElementById("signal").innerText=j.signal;
+ document.getElementById("var").innerText=j.var;
+ data.labels.push(j.ts.split("T")[1].split(".")[0]);
+ data.datasets[0].data.push(j.equity);
+ if(data.labels.length>120){data.labels.shift();data.datasets[0].data.shift();}
+ chart.update();
+};
+</script></body></html>
