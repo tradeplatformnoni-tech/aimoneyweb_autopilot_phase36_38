@@ -33,7 +33,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.NEOLIGHT_GH_TOKEN }}
 
       # 4️⃣ Login to Docker Hub (for external deploys)
       - name: Login to Docker Hub
