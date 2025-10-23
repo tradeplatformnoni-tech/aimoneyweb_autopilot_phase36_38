@@ -1,0 +1,15 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: neolight-autopatch
+spec:
+  schedule: "*/2 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: autopatch
+            image: neolight/autopatch:latest
+            imagePullPolicy: IfNotPresent
+          restartPolicy: OnFailure

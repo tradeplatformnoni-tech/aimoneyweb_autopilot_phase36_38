@@ -1,36 +1,80 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>AI Money Web :: K8s Canary (151–160)</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
- body{background:#0d1117;color:#fff;font-family:system-ui;margin:0;padding:24px}
- h1{margin:0 0 8px;color:#00ffc8}
- canvas{max-width:960px;width:100%;height:360px}
- .row{display:flex;gap:16px;flex-wrap:wrap}
- .card{background:#111826;border:1px solid #223146;border-radius:12px;padding:16px;flex:1;min-width:260px}
-</style></head>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>📊 AI Money Web :: Live Trade Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; background: #0f172a; color: #e2e8f0; }
+    h1 { color: #38bdf8; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; background: #1e293b; }
+    th, td { border: 1px solid #334155; padding: 8px; text-align: left; }
+    th { background: #0ea5e9; color: white; }
+    canvas { background: #020617; border: 1px solid #334155; border-radius: 6px; }
+  </style>
+</head>
 <body>
-<h1>🚀 AI Money Web :: K8s Canary</h1>
-<div class="row">
-  <div class="card">
-    <div>Status: <span id="status">Connecting…</span></div>
-    <div>Signal: <span id="signal">—</span></div>
-    <div>VaR: <span id="var">—</span></div>
-  </div>
-</div>
-<canvas id="chart"></canvas>
-<script>
-const ws=new WebSocket("ws://"+location.host+"/ws/live");
-const ctx=document.getElementById("chart").getContext("2d");
-const data={labels:[],datasets:[{label:"Equity",data:[],borderColor:"#00ffc8",fill:false}]};
-const chart=new Chart(ctx,{type:"line",data});
-ws.onmessage=e=>{
- const j=JSON.parse(e.data);
- document.getElementById("status").innerText="OK";
- document.getElementById("signal").innerText=j.signal;
- document.getElementById("var").innerText=j.var;
- data.labels.push(j.ts.split("T")[1].split(".")[0]);
- data.datasets[0].data.push(j.equity);
- if(data.labels.length>120){data.labels.shift();data.datasets[0].data.shift();}
- chart.update();
-};
-</script></body></html>
+  <h1>🚀 AI Money Web :: Live Trades</h1>
+  <p>Phase 341–380 — Realtime analytics dashboard with trend visualization.</p>
+
+  <h2>📈 Trade Price Chart</h2>
+  <canvas id="tradeChart" width="900" height="400"></canvas>
+
+  <h2>🧾 Recent Trades</h2>
+  <table>
+    <thead><tr><th>Timestamp</th><th>Symbol</th><th>Action</th><th>Price</th><th>Qty</th></tr></thead>
+    <tbody id="trades"></tbody>
+  </table>
+
+  <script>
+    async function loadTrades() {
+      const r = await fetch('/api/live_trades');
+      const json = await r.json();
+      const trades = json.trades || [];
+
+      const labels = trades.map(t => new Date(t.timestamp).toLocaleTimeString());
+      const prices = trades.map(t => t.price);
+      const colors = trades.map(t => t.action === 'buy' ? 'rgb(34,197,94)' : 'rgb(239,68,68)');
+
+      const ctx = document.getElementById('tradeChart').getContext('2d');
+      if (window.tradeChart) window.tradeChart.destroy();
+      window.tradeChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels.reverse(),
+          datasets: [{
+            label: 'Trade Prices',
+            data: prices.reverse(),
+            borderWidth: 2,
+            borderColor: '#38bdf8',
+            pointBackgroundColor: colors.reverse(),
+            fill: false,
+            tension: 0.25
+          }]
+        },
+        options: {
+          scales: { y: { beginAtZero: false } },
+          plugins: { legend: { display: true, labels: { color: '#f8fafc' } } }
+        }
+      });
+
+      const tbody = document.getElementById('trades');
+      tbody.innerHTML = '';
+      trades.forEach(t => {
+        const row = `<tr>
+          <td>${t.timestamp}</td>
+          <td>${t.symbol}</td>
+          <td style="color:${t.action === 'buy' ? 'lime' : 'red'}">${t.action}</td>
+          <td>${t.price}</td>
+          <td>${t.qty}</td>
+        </tr>`;
+        tbody.innerHTML += row;
+      });
+    }
+
+    // Initial load + refresh every 5 seconds
+    loadTrades();
+    setInterval(loadTrades, 5000);
+  </script>
+</body>
+</html>
+

@@ -1,6 +1,6 @@
 from textblob import TextBlob
 import requests
-def sentiment_boost(symbol="AAPL"):
+def sentiment_boost(symbol=None):
     try:
         r=requests.get(f"https://api.marketaux.com/v1/news/all?symbols={symbol}&filter_entities=true&language=en&api_token=demo")
         data=r.json().get("data",[])

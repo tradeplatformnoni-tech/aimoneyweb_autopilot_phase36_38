@@ -1,0 +1,22 @@
+{
+  "pnl": 6,
+  "sharpe": 31.757482864650452,
+  "trades": [
+    {
+      "type": "buy",
+      "price": 102
+    },
+    {
+      "type": "buy",
+      "price": 103
+    },
+    {
+      "type": "buy",
+      "price": 104
+    },
+    {
+      "type": "buy",
+      "price": 105
+    }
+  ]
+}

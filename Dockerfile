@@ -1,13 +1,10 @@
-FROM python:3.12-slim
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PORT=8000
-
+FROM python:3.11-slim
 WORKDIR /app
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . /app
-EXPOSE 8000
-CMD ["python","-m","uvicorn","main:app","--host","0.0.0.0","--port","8000"]
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir pm2 psutil
+COPY . .
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+# PM2 will run both backend and agent
+CMD ["pm2-runtime", "ecosystem.config.cjs"]

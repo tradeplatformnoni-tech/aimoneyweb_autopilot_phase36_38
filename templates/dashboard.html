@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>NeoLight v4.0 :: Portfolio Manager</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h1>💡 AI Money Web :: NeoLight v4.0</h1>
+
+  <nav class="tabs">
+    <button data-tab="tab-dash" class="active">Dashboard</button>
+    <button data-tab="tab-portfolio">Portfolio</button>
+    <button data-tab="tab-logs">Logs</button>
+  </nav>
+
+  <section id="tab-dash" class="tab active">
+    <div class="row">
+      <strong>Data Mode:</strong>
+      <label class="switch"><input type="checkbox" id="modeToggle"/><span class="slider round"></span></label>
+      <span id="modeStatus" class="badge">Loading...</span>
+
+      <strong style="margin-left:2rem;">Auto Trade:</strong>
+      <label class="switch"><input type="checkbox" id="autoToggle"/><span class="slider round"></span></label>
+      <span id="autoStatus" class="badge">Off</span>
+      <span class="tiny">Qty</span><input id="qty" class="qty" type="number" min="1" value="1"/>
+    </div>
+
+    <div class="panel">
+      <h3>📈 AAPL — Close Prices</h3>
+      <canvas id="priceChart" height="120"></canvas>
+    </div>
+  </section>
+
+  <section id="tab-portfolio" class="tab">
+    <div class="panel split">
+      <div>
+        <h3>💹 Equity Curve</h3>
+        <canvas id="equityChart" height="120"></canvas>
+      </div>
+      <div class="perf">
+        <h3>📊 Metrics</h3>
+        <div>Cumulative Return: <span id="m_cum">-</span></div>
+        <div>Sharpe: <span id="m_sharpe">-</span></div>
+        <div>Max Drawdown: <span id="m_mdd">-</span></div>
+        <div>Trades: <span id="m_trades">-</span></div>
+        <h3 style="margin-top:1rem;">⚖️ Strategy Weights</h3>
+        <div>Momentum <input type="number" step="0.01" id="w_mom" class="winput" /></div>
+        <div>Crossover <input type="number" step="0.01" id="w_cross" class="winput" /></div>
+        <div>MeanRev <input type="number" step="0.01" id="w_mr" class="winput" /></div>
+        <button id="saveWeights">Save Weights</button>
+        <button id="optimize">AI Optimize</button>
+        <div class="tiny">Weights auto-normalize to 1.0</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>📦 Positions</h3>
+      <pre id="positions">Loading...</pre>
+    </div>
+  </section>
+
+  <section id="tab-logs" class="tab">
+    <div class="panel">
+      <h3>🧠 Strategy Logs</h3>
+      <pre id="logs">Loading...</pre>
+    </div>
+  </section>
+
+  <script src="/static/app_v4.js"></script>
+</body>
+</html>

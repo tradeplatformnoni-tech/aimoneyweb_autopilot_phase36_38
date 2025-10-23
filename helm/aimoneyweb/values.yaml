@@ -1,0 +1,5 @@
+image:
+  repository: ghcr.io/tradeplatformnoni-tech/aimoneyweb
+  tag: latest
+service:
+  port: 8000

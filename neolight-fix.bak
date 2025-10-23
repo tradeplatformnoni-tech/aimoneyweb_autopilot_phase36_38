@@ -1,0 +1,7 @@
+#!/bin/bash
+echo "🧩 Auto-fixing NeoLight..."
+find . -name "*.pyc" -delete
+find . -name "__pycache__" -exec rm -rf {} +
+echo "🔄 Restarting NeoLight backend..."
+pm2 restart neolight || echo "⚠️ PM2 not found. Restart manually."
+
