@@ -1,0 +1,76 @@
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Body
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from dotenv import load_dotenv; load_dotenv()
+import os, random, asyncio, json
+from ai.brokers.router import account_equity_cash, submit_market
+from ai.risk_manager import compute_drawdown, position_size
+from ai.fusion_engine import fuse_signals
+from ai.strategy_manager import pick as pick_strategy
+from ai.trade_analytics import log_trade, analyze
+from tools.fills_and_audit import log_fill, list_fills, audit_event, list_audit
+
+app=FastAPI(title="AI Money Web :: Phases 53–57")
+app.add_middleware(CORSMiddleware,allow_origins=["*"],allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
+
+EQUITY_HISTORY=[]
+BROKER=os.getenv("BROKER","ALPACA").upper()
+STRATEGY=os.getenv("STRATEGY","A").upper()
+
+@app.get("/")
+def root(): 
+    return {"message":"✅ AI Money Web up", "broker":BROKER, "strategy":STRATEGY}
+
+@app.get("/api/info")
+def info():
+    return {"broker":BROKER, "strategy":STRATEGY}
+
+@app.post("/api/strategy")
+def set_strategy(payload:dict=Body(...)):
+    global STRATEGY; s=(payload or {}).get("strategy","A").upper()
+    if s not in ("A","B","C"): return {"error":"use A|B|C"}
+    STRATEGY=s; os.environ["STRATEGY"]=s
+    audit_event("strategy", f"set {s}")
+    return {"ok":True,"strategy":s}
+
+@app.get("/api/trading_status")
+def trading_status():
+    eq, ca = account_equity_cash()
+    pnl=(eq-100000)/100000; risk=abs(pnl)+0.01
+    EQUITY_HISTORY.append(eq); dd=compute_drawdown(EQUITY_HISTORY[-60:])
+    fused = fuse_signals(pnl,risk,eq,dd)
+    # Strategy A/B/C rescoring
+    scored = pick_strategy(pnl,risk)
+    signal = 0.7*fused + 0.3*scored
+    size = position_size(signal, eq, dd)
+    side = "buy" if signal>0 else "sell"
+    res = submit_market("AAPL", side, max(int(size/200),1))
+    log_trade("AAPL", side, max(int(size/200),1), eq, eq, signal, dd)
+    audit_event("trade", json.dumps({"side":side,"size":size,"signal":signal,"broker":res.get('broker')}))
+    return {"broker":BROKER,"strategy":STRATEGY,"equity":eq,"cash":ca,"drawdown":dd,"signal":signal,"size":size,"order":res,"analytics":analyze()}
+
+@app.post("/webhook/fill")
+def webhook_fill(payload:dict=Body(...)):
+    # expected payload: {order_id,symbol,side,qty,price,broker}
+    log_fill(payload or {}); audit_event("fill", json.dumps(payload or {}))
+    return {"ok":True}
+
+@app.get("/api/fills")
+def fills(): return list_fills()
+
+@app.get("/api/audit")
+def audit(): return list_audit()
+
+@app.get("/dashboard",response_class=HTMLResponse)
+def dashboard():
+    if os.path.exists("static/dashboard.html"): 
+        return HTMLResponse(open("static/dashboard.html").read())
+    return HTMLResponse("<h3>dashboard missing</h3>")
+
+@app.websocket("/ws/trading_status")
+async def ws(ws:WebSocket):
+    await ws.accept()
+    try:
+        while True:
+            await ws.send_json(trading_status()); await asyncio.sleep(5)
+    except WebSocketDisconnect: pass

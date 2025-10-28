@@ -1,0 +1,10 @@
+{
+  "target_milestones": {
+    "2_years": 1000000,
+    "5_years": 10000000,
+    "10_years": 50000000
+  },
+  "current_equity": 25000,
+  "growth_target": 0.035,
+  "risk_tolerance": "medium"
+}

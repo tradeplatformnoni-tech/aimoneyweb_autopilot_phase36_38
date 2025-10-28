@@ -1,0 +1,87 @@
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
+import asyncio, os
+from pathlib import Path
+from datetime import datetime, timezone
+
+from dotenv import load_dotenv
+load_dotenv()
+
+API_KEY   = os.getenv("ALPACA_API_KEY_ID")
+API_SEC   = os.getenv("ALPACA_API_SECRET_KEY")
+BASE_URL  = os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
+
+# Lazy import so the app can still boot without the package in dev
+ALPACA_OK = False
+try:
+    from alpaca_trade_api.rest import REST
+    alpaca = REST(API_KEY, API_SEC, base_url=BASE_URL) if API_KEY and API_SEC else None
+    ALPACA_OK = alpaca is not None
+except Exception:
+    alpaca = None
+
+app = FastAPI(title="AI Money Web • Phase 37")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], allow_credentials=True,
+    allow_methods=["*"], allow_headers=["*"],
+)
+
+def utcnow():
+    return datetime.now(timezone.utc).isoformat()
+
+@app.get("/")
+def root():
+    return {"message": "✅ AI Money Web Backend is alive"}
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard():
+    if not os.path.exists("static/dashboard.html"):
+        return HTMLResponse("<h1>Dashboard missing. Re-run Phase 36.1.</h1>", status_code=500)
+    with open("static/dashboard.html") as f:
+        return f.read()
+
+@app.get("/api/alpaca_status")
+def api_alpaca_status():
+    try:
+        if ALPACA_OK:
+            acct = alpaca.get_account()
+            return {
+                "status": "connected",
+                "equity": float(acct.equity),
+                "cash": float(acct.cash),
+                "buying_power": float(acct.buying_power),
+                "timestamp": utcnow(),
+                "source": "alpaca"
+            }
+        # Fallback mock if keys missing
+        return {"status":"disconnected","equity":100000.0,"cash":25000.0,"buying_power":50000.0,"timestamp":utcnow(),"source":"mock"}
+    except Exception as e:
+        return JSONResponse({"status":"error","message":str(e),"timestamp":utcnow()}, status_code=200)
+
+@app.websocket("/ws/alpaca_status")
+async def ws_alpaca_status(ws: WebSocket):
+    await ws.accept()
+    try:
+        while True:
+            try:
+                if ALPACA_OK:
+                    acct = alpaca.get_account()
+                    payload = {
+                        "status": "connected",
+                        "equity": float(acct.equity),
+                        "cash": float(acct.cash),
+                        "buying_power": float(acct.buying_power),
+                        "timestamp": utcnow(),
+                        "source": "alpaca"
+                    }
+                else:
+                    payload = {"status":"disconnected","equity":100000.0,"cash":25000.0,"buying_power":50000.0,"timestamp":utcnow(),"source":"mock"}
+                await ws.send_json(payload)
+            except Exception as e:
+                await ws.send_json({"status":"error","message":str(e),"timestamp":utcnow()})
+            await asyncio.sleep(5)
+    except WebSocketDisconnect:
+        pass

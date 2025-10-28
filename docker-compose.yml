@@ -1,0 +1,55 @@
+services:
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: neolight_dashboard
+    ports: ["5050:5050"]
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL","curl -sf http://127.0.0.1:5050/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    volumes:
+      - ./runtime:/app/runtime
+      - ./logs:/app/logs
+      - ./config:/app/config
+
+  autopatch:
+    build:
+      context: .
+      dockerfile: autopatch_controller.py
+    container_name: neolight_autopatch
+    restart: always
+    environment:
+      - PUSHOVER_TOKEN=${PUSHOVER_TOKEN}
+      - PUSHOVER_USER=${PUSHOVER_USER}
+    volumes:
+      - ./logs:/app/logs
+      - ./runtime:/app/runtime
+
+  observer:
+    build:
+      context: .
+      dockerfile: observer.Dockerfile
+    container_name: neolight_observer
+    restart: always
+    environment:
+      - PUSHOVER_TOKEN=${PUSHOVER_TOKEN}
+      - PUSHOVER_USER=${PUSHOVER_USER}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./logs:/app/logs
+
+  agent_core:
+    image: neolight/agent-core:latest
+    build:
+      context: .
+      dockerfile: agents/Dockerfile
+    container_name: aimoneyweb_autopilot_phase36_38-agent_core-1
+    restart: always
+
+networks:
+  default:
+    name: neolight_mesh

@@ -1,0 +1,75 @@
+from fastapi import FastAPI, WebSocket, Body
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from dotenv import load_dotenv; load_dotenv()
+import os, asyncio, random, time
+from ai.brokers.router import account_equity_cash, submit_market
+from ai.strategy_manager import pick as pick_strategy
+from ai.risk.var_calc import value_at_risk
+from ai.sentiment.feed import sentiment_boost
+from ai.federation.aggregator import accept_update, best_model
+from ai.genetic.trainer import evolve
+
+app = FastAPI(title="AI Money Web :: Federated Global (83–90)")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+MODE = {"mode": "trading"}
+RISK = {"cap": 0.03}    # VaR cap
+HIST = {"eq": []}
+
+@app.get("/")
+def root(): return {"message": "✅ Global engine online (83–90)", "mode": MODE["mode"], "risk_cap": RISK["cap"]}
+
+@app.post("/api/mode")
+def set_mode(payload: dict = Body(...)):
+    MODE["mode"] = payload.get("mode", "trading")
+    return {"ok": True, "mode": MODE["mode"]}
+
+@app.post("/api/risk")
+def set_risk(payload: dict = Body(...)):
+    RISK["cap"] = float(payload.get("cap", 0.03))
+    return {"ok": True, "cap": RISK["cap"]}
+
+@app.post("/api/federate")
+def federate(payload: dict = Body(...)):
+    peer = payload.get("peer", "unknown")
+    score = float(payload.get("score", 0.0))
+    weights = payload.get("weights", {"w": 0})
+    return accept_update(peer, score, weights)
+
+@app.get("/api/federate/best")
+def federate_best(): return best_model()
+
+@app.post("/api/genetic/train")
+def ga_train():
+    res = evolve()
+    # push update into federation immediately
+    return accept_update("local_ga", float(res["score"]), res["best"])
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard():
+    return HTMLResponse(open("static/dashboard.html").read())
+
+@app.websocket("/ws/global")
+async def ws_global(ws: WebSocket):
+    await ws.accept()
+    while True:
+        eq, ca = account_equity_cash()
+        HIST["eq"].append(eq)
+        pnl = (eq - 100000) / 100000
+        var = value_at_risk([pnl])
+        sent = sentiment_boost("AAPL")
+        base_sig = pick_strategy(pnl, abs(pnl) + 0.01)
+        bm = best_model()
+        w = float(bm.get("weights", {}).get("w", 0.0))
+        fed_sig = base_sig + (0.25 * w) + (0.1 * sent)
+        if MODE["mode"] != "trading": action = "hold"
+        elif var > RISK["cap"]: action = "hold"
+        else: action = "buy" if fed_sig > 0 else "sell"
+        if action != "hold": submit_market("AAPL", action, 1)
+        await ws.send_json({
+            "equity": eq, "signal": fed_sig, "action": action,
+            "var": var, "cap": RISK["cap"], "sentiment": sent,
+            "mode": MODE["mode"], "w": w, "peers": "federated"
+        })
+        await asyncio.sleep(5)

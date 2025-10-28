@@ -1,0 +1,61 @@
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Body
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from dotenv import load_dotenv; load_dotenv()
+import os, random, asyncio
+from ai.fusion_engine import fuse_signals
+from ai.risk_manager import compute_drawdown, position_size
+from ai.trade_executor import place_trade, get_positions
+from ai.trade_analytics import log_trade, analyze
+from tools.cloud_sync import upload_logs, backup_db
+
+app=FastAPI(title="AI Money Web :: Phases 50–52+")
+app.add_middleware(CORSMiddleware,allow_origins=["*"],allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
+EQUITY_HISTORY=[]
+
+@app.get("/health")
+def health(): return {"ok":True}
+
+@app.get("/")
+def root(): return {"message":"✅ AI Money Web Cloud Pack Online"}
+
+@app.get("/api/positions")
+def positions(): return get_positions()
+
+@app.post("/api/mode")
+def mode(payload: dict = Body(...)):
+    m=(payload or {}).get("mode","").lower()
+    if m in ("paper","live"):
+        os.environ["ALPACA_MODE"]=m
+        return {"mode":m,"note":"only affects new processes; set in .env for persistence"}
+    return {"error":"send {'mode':'paper'|'live'}"}
+
+@app.get("/sync")
+def sync(): return {"logs":upload_logs(),"db":backup_db()}
+
+@app.get("/api/trading_status")
+def status():
+    # NOTE: replace the next two lines with real account pulls if desired
+    equity=100000+random.uniform(-600,600); cash=25000+random.uniform(-200,200)
+    pnl=(equity-100000)/100000; risk=abs(pnl)+0.01
+    EQUITY_HISTORY.append(equity)
+    draw=compute_drawdown(EQUITY_HISTORY[-60:])
+    sig=fuse_signals(pnl,risk,equity,draw)
+    size=position_size(sig,equity,draw)
+    oid=place_trade(sig,size) if os.getenv("ALPACA_API_KEY") else None
+    log_trade("AAPL","buy" if sig>0 else "sell",int(size/200),equity,equity,sig,draw)
+    return {"equity":equity,"cash":cash,"signal":sig,"drawdown":draw,"trade_id":oid,"analytics":analyze()}
+
+@app.websocket("/ws/trading_status")
+async def ws(ws:WebSocket):
+    await ws.accept()
+    try:
+        while True:
+            await ws.send_json(status()); await asyncio.sleep(5)
+    except WebSocketDisconnect: pass
+
+@app.get("/dashboard",response_class=HTMLResponse)
+def dashboard():
+    if os.path.exists("static/dashboard.html"): 
+        return HTMLResponse(open("static/dashboard.html").read())
+    return HTMLResponse("<h3>Dashboard missing — rerun setup.</h3>")

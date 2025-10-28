@@ -1,0 +1,2 @@
+/Users/oluwaseyeakinbola/Downloads/aimoneyweb_autopilot_phase36_38/ai/ai_trainer_daemon.py:19: RankWarning: Polyfit may be poorly conditioned
+  weights=np.polyfit(X[:,0],y,1)

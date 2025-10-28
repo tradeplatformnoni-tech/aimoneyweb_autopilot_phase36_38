@@ -1,0 +1,226 @@
+#!/bin/bash
+
+echo "🧠 Running NeoLight AutoFix Pilot..."
+echo "-----------------------------------"
+
+# ✅ 1. Fix permissions
+echo "🔒 Fixing permission issues for .sh scripts..."
+chmod +x *.sh tools/*.sh
+
+# ✅ 2. Ensure required Python packages
+echo "📦 Ensuring required Python packages..."
+pip install -q fastapi uvicorn requests
+
+# ✅ 3. Re-validate API routes
+echo "🔁 Re-validating backend/main.py routes..."
+if ! grep -q "backtest" backend/main.py; then
+    echo "❗ Missing backtest API route. Run phase_1001_1100_autopilot.sh"
+fi
+
+if ! grep -q "portfolio" backend/main.py; then
+    echo "❗ Portfolio API missing. Run phase_1101_1200_autopilot.sh"
+fi
+
+if ! grep -q "console" backend/main.py; then
+    echo "❗ Console API/UI missing. Run phase_1201_1300_autopilot.sh"
+fi
+
+if ! grep -q "mesh" backend/main.py; then
+    echo "❗ Neural Mesh API missing. Run phase_1301_1400_autopilot.sh"
+fi
+
+if ! grep -q "network" backend/main.py; then
+    echo "❗ Collaborative Network routes missing. Run phase_1401_1500_autopilot.sh"
+fi
+
+# ✅ 4. Check mesh adapter
+if [ ! -f "mesh/agent_adapter.py" ]; then
+    echo "❗ Agent mesh adapter missing. Run phase_1501_1520_agent_mesh_autopilot.sh"
+fi
+
+# ✅ 5. Check core agent files
+for a in sports collectibles luxury studio; do
+  if [ ! -f "agents/$a/runner.py" ]; then
+    echo "❗ Agent $a not found — run phase_1521_1560_new_agents_autopilot.sh"
+  fi
+done
+
+# ✅ 6. Check orchestrator
+if [ ! -f "tools/orchestrator.py" ]; then
+    echo "❗ Orchestrator missing. Run phase_1561_1600_ai_ops_autopilot.sh"
+fi
+
+# ✅ 7. Check symbols.json
+echo "🔍 Checking symbols.json..."
+if [ ! -f config/symbols.json ]; then
+    echo "❗ config/symbols.json is missing!"
+else
+    cat config/symbols.json
+fi
+
+# ✅ 8. Check agents.json
+echo "🕸 Checking agents.json..."
+if [ ! -f config/agents.json ]; then
+    echo "❗ agents.json missing!"
+else
+    cat config/agents.json
+fi
+
+# ✅ 9. Check optimizer.json
+echo "📊 Re-validating optimizer.json..."
+if [ ! -f config/optimizer.json ]; then
+    echo "❗ optimizer.json not found"
+else
+    cat config/optimizer.json
+fi
+
+# ✅ 10. Check strategy_daemon.py multi-symbol support
+echo "🔎 Re-validating strategy_daemon.py..."
+if grep -q 'for symbol in symbols' tools/strategy_daemon.py; then
+    echo "✅ strategy_daemon.py is patched."
+else
+    echo "❗ strategy_daemon.py missing multi-asset logic."
+fi
+
+# ✅ 11. Strategy Daemon Process
+echo "✅ Strategy daemon check:"
+ps aux | grep strategy_daemon | grep -v grep
+
+# ✅ 12. Health endpoint
+echo "✅ FastAPI running check:"
+curl -s http://127.0.0.1:8000/api/health || echo "❗ Health endpoint may be down"
+
+# ✅ 13. Backend log check
+echo "✅ Log tail:"
+tail -n 10 logs/backend.log || echo "❗ No logs found."
+
+# ✅ 14. Watchdog check
+echo "🧠 Watching logs/watchdog.log (tail -n 10)"
+tail -n 10 logs/watchdog.log || echo "❗ Watchdog log not found"
+
+echo "🧩 Checking strategy generator components..."
+if [ ! -f ai/strategy_generator.py ]; then
+    echo "❗ strategy_generator.py missing → run phase_1751_1800_strategy_autopilot.sh"
+else
+    echo "✅ strategy_generator.py found."
+fi
+
+if [ ! -f config/strategies.json ]; then
+    echo "❗ strategies.json not found → regenerating..."
+    python3 ai/strategy_generator.py
+else
+    echo "✅ strategies.json present."
+fi
+
+echo "🕸 Checking Mesh and Telemetry layers..."
+[ -f api/mesh/routes.py ] && echo "✅ Mesh routes OK" || echo "❗ Mesh routes missing"
+[ -f tools/telemetry_daemon.py ] && echo "✅ Telemetry daemon OK" || echo "❗ Telemetry missing"
+[ -f ai/firewall.py ] && echo "✅ AI Firewall OK" || echo "❗ AI Firewall missing"
+
+echo "📈 Recent Telemetry entries:"
+tail -n 5 logs/performance/telemetry.csv 2>/dev/null || echo "❗ Telemetry log empty"
+
+echo "🧠 Validating Brain Merge Phase files..."
+[ -f ai/brain_merge.py ] && echo "✅ brain_merge.py present" || echo "❗ brain_merge.py missing"
+[ -f api/brain/routes.py ] && echo "✅ brain API routes present" || echo "❗ brain API routes missing"
+[ -f config/brain.json ] && echo "✅ brain.json found" || echo "❗ brain.json missing – regenerate with ai/brain_merge.py"
+
+echo "💬 Checking NLP and Marketplace components..."
+[ -f ai/nlp_query.py ] && echo "✅ nlp_query.py found" || echo "❗ nlp_query.py missing"
+[ -f api/nlp/routes.py ] && echo "✅ NLP routes OK" || echo "❗ NLP routes missing"
+[ -f api/marketplace/routes.py ] && echo "✅ Marketplace routes OK" || echo "❗ Marketplace routes missing"
+[ -f config/marketplace.json ] && echo "✅ marketplace.json exists" || echo "❗ marketplace.json will be created on first publish"
+
+echo "👥 Checking Collaboration & Deal modules..."
+[ -f ai/collaboration_engine.py ] && echo "✅ collaboration_engine.py OK" || echo "❗ collaboration_engine.py missing"
+[ -f ai/deal_engine.py ] && echo "✅ deal_engine.py OK" || echo "❗ deal_engine.py missing"
+[ -f api/collab/routes.py ] && echo "✅ Collab routes OK" || echo "❗ Collab routes missing"
+[ -f api/deal/routes.py ] && echo "✅ Deal routes OK" || echo "❗ Deal routes missing"
+tail -n 5 logs/collaboration_log.json 2>/dev/null || echo "ℹ️ No collaboration logs yet"
+tail -n 5 logs/deal_log.json 2>/dev/null || echo "ℹ️ No deal logs yet"
+
+echo "🧠 Checking Core Console + Monitors..."
+[ -f api/core/routes.py ] && echo "✅ Core Console OK" || echo "❗ core/routes.py missing"
+[ -f tools/orchestrator.py ] && echo "✅ Orchestrator OK" || echo "❗ orchestrator.py missing"
+[ -f tools/self_heal.py ] && echo "✅ Self-Heal module OK" || echo "❗ self_heal.py missing"
+tail -n 5 logs/orchestrator.log 2>/dev/null || echo "ℹ️ No orchestrator logs yet"
+tail -n 5 logs/selfheal.log 2>/dev/null || echo "ℹ️ No self-heal logs yet"
+
+echo "💹 Checking portfolio systems..."
+[ -f tools/portfolio_updater.py ] && echo "✅ portfolio_updater.py OK" || echo "❗ Missing"
+[ -f tools/portfolio_daemon.sh ] && echo "✅ portfolio_daemon.sh OK" || echo "❗ Missing"
+[ -f logs/dashboard_portfolio.json ] && tail -n 5 logs/dashboard_portfolio.json || echo "ℹ️ Portfolio log pending refresh"
+
+echo "🌍 Checking multi-asset feed patch..."
+grep -q "symbols=json.load" ai/signal_engine.py && echo "✅ Dynamic symbols active" || echo "❗ Static feed detected"
+grep -q "execute_trades" ai/trade_executor.py && echo "✅ Trade executor synced" || echo "❗ Executor missing patch"
+
+echo "🧪 Verifying requests & dotenv in venv..."
+if [ -x "./venv/bin/pip" ]; then
+  ./venv/bin/pip show requests >/dev/null 2>&1 || ./venv/bin/pip install -q requests
+  ./venv/bin/pip show python-dotenv >/dev/null 2>&1 || ./venv/bin/pip install -q python-dotenv
+fi
+
+echo "🔎 Checking portfolio snapshot..."
+[ -f logs/dashboard_portfolio.json ] && tail -n 5 logs/dashboard_portfolio.json || echo "ℹ️ No portfolio snapshot yet (run tools/portfolio_updater.py after setting .env)."
+
+echo "🔑 Validating .env keys..."
+grep -q "ALPACA_API_KEY=" .env && echo "✅ Alpaca API key present" || echo "❗ Missing Alpaca API key"
+grep -q "ALPACA_SECRET_KEY=" .env && echo "✅ Alpaca secret present" || echo "❗ Missing Alpaca secret"
+grep -q "ALPACA_API_KEY_ID=" .env && echo "⚠️ Duplicate key found – please remove ALPACA_API_KEY_ID"
+grep -q "ALPACA_API_SECRET=" .env && echo "⚠️ Duplicate key found – please remove ALPACA_API_SECRET"
+
+echo "🌐 Verifying multi-asset feed..."
+grep -q "for sym in symbols" ai/signal_engine.py && echo "✅ Feed rotation active" || echo "❗ Feed still static"
+
+echo "🌐 Verifying crypto fallback stack..."
+[ -f ai/providers/crypto_provider.py ] && echo "✅ crypto_provider present" || echo "❗ crypto_provider missing"
+[ -f ai/providers/data_feed.py ] && echo "✅ data_feed router OK" || echo "❗ data_feed missing"
+python3 - <<'PY'
+import json, os
+ok = os.path.exists("logs/signals.jsonl")
+print("📈 signals.jsonl exists" if ok else "ℹ️ No signals logged yet")
+print("🔎 symbols:", json.load(open("config/symbols.json")))
+PY
+
+echo "📦 Ensuring required Python packages..."
+pip install -q fastapi uvicorn requests
+
+echo "🧩 Verifying commodity fallback source..."
+if ! grep -q "tradingeconomics" ai/providers/fallback_provider.py; then
+    echo "⚙️  Updating fallback provider to TradingEconomics feed..."
+    sed -i '' 's/metals-api.com/api.tradingeconomics.com/g' ai/providers/fallback_provider.py
+fi
+
+echo "✅ AutoFix Complete!"
+
+
+echo "🧩 Verifying commodity feed health..."
+python3 - <<'PYCODE'
+from ai.providers.commodity_provider import CommodityProvider
+from tools.alert_notify import send_alert
+provider = CommodityProvider()
+data = provider.get_latest_prices()
+if not data:
+    print("⚠️ No commodity data. Sending alert...")
+    send_alert("⚠️ Commodity feed failure — All sources offline.")
+else:
+    print(f"✅ Commodity feed OK from {data['source']}: XAU={data.get('XAU')} XAG={data.get('XAG')}")
+PYCODE
+
+echo "🔎 Commodity cache status:"
+[ -f logs/commodity_cache.json ] && cat logs/commodity_cache.json || echo "❗ No commodity cache found."
+
+echo "🧪 Commodity feed quick-check:"
+python3 - <<'PY'
+from ai.providers.commodity_provider import CommodityProvider
+cp=CommodityProvider()
+print(cp.get_latest_prices())
+PY
+
+echo "📈 Compute risk policy (quick):"
+python3 ai/risk/risk_governor.py
+python3 tools/apply_risk_policy.py
+
+echo "📂 Show current weights.json:"
+cat config/weights.json || echo "❗ weights.json missing"
