@@ -1,0 +1,25 @@
+{
+  "timestamp": "2025-10-23T09:53:31.270260",
+  "weights": {
+    "AAPL": 0.1,
+    "MSFT": 0.1,
+    "GOOGL": 0.125,
+    "AMZN": 0.125,
+    "NVDA": 0.125,
+    "SPY": 0.125,
+    "GOLD": 0.175,
+    "SILVER": 0.125
+  },
+  "volatility": {
+    "AAPL": 0.02,
+    "MSFT": 0.02,
+    "GOOGL": 0.02,
+    "AMZN": 0.02,
+    "NVDA": 0.02,
+    "SPY": 0.02,
+    "GOLD": 0.02,
+    "SILVER": 0.02
+  },
+  "stress": 0.02,
+  "notes": "Inverse-vol base, caps, + stress-driven GOLD hedge"
+}

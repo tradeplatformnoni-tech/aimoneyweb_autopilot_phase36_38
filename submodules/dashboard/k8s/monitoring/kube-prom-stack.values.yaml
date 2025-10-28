@@ -1,0 +1,22 @@
+grafana:
+  enabled: true
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  service:
+    type: NodePort
+    nodePort: 30000
+  serviceMonitor:
+    selfMonitor: true
+prometheus:
+  service:
+    type: NodePort
+    nodePort: 30090
+  prometheusSpec:
+    retention: 15d
+alertmanager:
+  enabled: true
+  service:
+    type: NodePort
+    nodePort: 30093

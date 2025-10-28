@@ -1,0 +1,44 @@
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, FileResponse
+import asyncio, datetime, random, json, os
+
+app = FastAPI(title="AI Money Web :: Federated Orchestrator (121–130)")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+def root():
+    return {
+        "message": "✅ Federated Orchestrator active",
+        "phase": "121–130",
+        "clusters": random.randint(3,7),
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard():
+    return FileResponse("static/dashboard.html")
+
+@app.websocket("/ws/clusters")
+async def ws_clusters(ws: WebSocket):
+    await ws.accept()
+    try:
+        while True:
+            await ws.send_json({
+                "nodes": random.randint(3,10),
+                "active": random.randint(2,8),
+                "load_balancer": round(random.uniform(0.3,0.95),2),
+                "cpu_usage": round(random.uniform(20,90),1),
+                "mem_usage": round(random.uniform(30,85),1),
+                "timestamp": datetime.datetime.utcnow().isoformat()
+            })
+            await asyncio.sleep(3)
+    except WebSocketDisconnect:
+        print("🔌 Cluster WebSocket disconnected.")

@@ -1,0 +1,17 @@
+{
+  "strategies": {
+    "momentum": {
+      "pnl": 9,
+      "weight": 0.4
+    },
+    "crossover": {
+      "pnl": 9,
+      "weight": 0.4
+    },
+    "mean_reversion": {
+      "pnl": 9,
+      "weight": 0.2
+    }
+  },
+  "portfolio_pnl": 9.0
+}

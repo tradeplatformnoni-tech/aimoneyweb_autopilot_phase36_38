@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>NeoLight A.I. Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0b0c10;
+      color: #eee;
+      text-align: center;
+      padding-top: 20px;
+    }
+    h1 { color: #66fcf1; }
+    h3 { color: #45a29e; }
+    .card {
+      display: inline-block;
+      background: #1f2833;
+      margin: 10px;
+      padding: 20px;
+      border-radius: 12px;
+      width: 260px;
+      box-shadow: 0 0 10px #0b0c10;
+    }
+    h2 { color: #66fcf1; }
+    span.value { font-size: 1.4em; color: #45a29e; }
+    .flash { transition: color 0.4s ease; }
+    .flash.update { color:#66fcf1; }
+  </style>
+</head>
+<body>
+  <h1>🌐 NeoLight Wealth Mesh Dashboard</h1>
+  <h3>Phase <span id="phase"></span></h3>
+
+  <div class="card">
+    <h2>ProfitSignal</h2>
+    Reward: <span class="flash" id="reward"></span><br/>
+    Profit: $<span class="flash" id="profit"></span><br/>
+    Alive: <span class="flash" id="alive"></span>
+  </div>
+
+  <div class="card">
+    <h2>AdaptiveOptimizer</h2>
+    Risk/Trade: <span class="flash" id="risk"></span><br/>
+    Capital Risk: <span class="flash" id="capital"></span><br/>
+    Drawdown: <span class="flash" id="drawdown"></span>
+  </div>
+
+  <div class="card">
+    <h2>ProfitGovernor</h2>
+    Atlas Trading: <span class="flash" id="atlas"></span><br/>
+    Commerce Agents: <span class="flash" id="commerce"></span><br/>
+    Cash Buffer: <span class="flash" id="cash"></span>
+  </div>
+
+  <script>
+  async function getWidget(url){const res=await fetch(url);return await res.json();}
+  function flash(id,val){const e=document.getElementById(id);
+    if(!e)return;
+    if(e.textContent!==String(val)){e.textContent=val;e.classList.add('update');
+    setTimeout(()=>e.classList.remove('update'),400);}
+  }
+  async function updateDashboard(){
+    const [r,p,g,ph]=await Promise.all([
+      getWidget('/widgets/reward'),
+      getWidget('/widgets/params'),
+      getWidget('/widgets/govern'),
+      getWidget('/widgets/phase')
+    ]);
+    flash('reward',r.reward.toFixed(2));
+    flash('profit',r.profit.toFixed(2));
+    flash('alive',r.alive);
+    flash('risk',p.risk_per_trade);
+    flash('capital',p.capital_at_risk);
+    flash('drawdown',p.drawdown_throttle);
+    flash('atlas',g.allocation.atlas_trading);
+    flash('commerce',g.allocation.commerce_agents);
+    flash('cash',g.allocation.cash_buffer);
+    flash('phase',ph.phase);
+  }
+  updateDashboard();
+ 

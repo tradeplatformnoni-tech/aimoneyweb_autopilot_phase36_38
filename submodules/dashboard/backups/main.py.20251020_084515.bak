@@ -1,0 +1,43 @@
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, FileResponse
+import asyncio, os, json, datetime, random
+
+app = FastAPI(title="AI Money Web Global Autopilot Fusion")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+def root():
+    return {
+        "message": "✅ Global Autopilot Fusion active",
+        "phase": "91–100",
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard():
+    return FileResponse("static/dashboard.html")
+
+@app.websocket("/ws/fusion")
+async def fusion_ws(ws: WebSocket):
+    await ws.accept()
+    try:
+        while True:
+            payload = {
+                "status": "ok",
+                "equity": round(100000 + random.uniform(-500, 500), 2),
+                "pnl": round(random.uniform(-200, 200), 2),
+                "signal": random.choice(["BUY", "SELL", "HOLD"]),
+                "timestamp": datetime.datetime.utcnow().isoformat()
+            }
+            await ws.send_json(payload)
+            await asyncio.sleep(3)
+    except WebSocketDisconnect:
+        print("🔌 WebSocket client disconnected")
