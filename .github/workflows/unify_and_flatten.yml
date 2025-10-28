@@ -1,0 +1,45 @@
+name: 🧠 NeoLight Unified Merge & Flatten
+
+on:
+  push:
+    branches:
+      - "feature/**"
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  unify:
+    name: Merge & Flatten Submodules
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 🔽 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: ⚙️ Set up Environment
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y rsync git
+
+      - name: 🚀 Run Unify Script
+        run: |
+          chmod +x unify_repos.sh || true
+          bash unify_repos.sh || true
+
+      - name: 🧩 Run Flatten Script
+        run: |
+          chmod +x flatten_structure.sh || true
+          bash flatten_structure.sh || true
+
+      - name: ✅ Commit & Push Changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Auto-unify & flatten after feature merge" || echo "No changes to commit"
+          git push origin main
+
