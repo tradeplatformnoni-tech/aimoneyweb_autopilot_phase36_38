@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: aimoneyweb-config
-  namespace: aimoney
-data:
-  APP_NAME: "AI Money Web"
-  PHASE: "151-160"
