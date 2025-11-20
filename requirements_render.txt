@@ -1,0 +1,21 @@
+# Minimal requirements for Render deployment
+# Only essential packages for render_app_simple.py and render_app.py
+
+# Web Framework (Required)
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+starlette==0.27.0
+
+# Core dependencies
+python-dateutil==2.8.2
+anyio>=3.7.1,<4.0.0
+click==8.1.7
+pydantic==2.5.0
+
+# System utilities
+psutil==5.9.6
+requests==2.31.0
+
+# Note: pandas, numpy, scipy removed for initial deployment
+# These require compilation on Python 3.13
+# Will add back once base deployment is stable
