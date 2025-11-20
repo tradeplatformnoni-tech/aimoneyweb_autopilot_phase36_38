@@ -9,7 +9,7 @@ services:
     plan: free  # Free tier (750 hours/month)
     region: oregon  # us-west-2 (low latency)
     buildCommand: pip install -r requirements.txt
-    startCommand: python3 trader/smart_trader.py
+    startCommand: python3 render_app.py
     healthCheckPath: /health
     envVars:
       - key: TRADING_MODE
@@ -29,5 +29,3 @@ services:
 # Auto-deploy from GitHub
 # Connect your GitHub repo in Render dashboard
 # Render will auto-deploy on push to main branch
-
-
