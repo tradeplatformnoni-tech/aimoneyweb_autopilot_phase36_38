@@ -1,0 +1,50 @@
+# NeoLight Production Dependencies
+# =================================
+# Core dependencies for Fly.io deployment
+
+# Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+starlette==0.27.0
+python-dateutil==2.8.2
+anyio>=3.7.1,<4.0.0
+click==8.1.7
+
+# Data Processing
+pandas==2.1.3
+numpy==1.26.2
+yfinance==0.2.32
+scipy==1.11.4
+
+# Machine Learning
+scikit-learn==1.3.2
+
+# System
+psutil==5.9.6
+requests==2.31.0
+httpx==0.25.2
+tenacity==8.2.3
+
+# Visualization
+plotly==5.18.0
+pillow==10.1.0
+
+# Optional but recommended
+pydantic==2.5.0
+python-multipart==0.0.6
+
+# Environment Management
+python-dotenv>=1.0.0
+
+# Development Tools
+ruff>=0.1.0
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pre-commit>=3.5.0
+
+# AI Integration (Optional)
+openai>=1.0.0  # For Kimi K2 (Moonshot AI) and other OpenAI-compatible APIs
+anthropic>=0.18.0  # For Claude API (optional)
+
+# Note: Additional optional dependencies can be installed at runtime
+# if needed (e.g., xgboost, tensorflow, selenium)
