@@ -1,0 +1,44 @@
+steps:
+  # Build container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: 
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/neolight-failover:latest'
+      - '-f'
+      - 'cloud-run/Dockerfile'
+      - '.'
+
+  # Push to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/neolight-failover:latest']
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'neolight-failover'
+      - '--image=gcr.io/$PROJECT_ID/neolight-failover:latest'
+      - '--region=us-central1'
+      - '--platform=managed'
+      - '--min-instances=0'
+      - '--max-instances=1'
+      - '--memory=2Gi'
+      - '--cpu=2'
+      - '--timeout=3600'
+      - '--allow-unauthenticated'
+      - '--set-env-vars=TRADING_MODE=PAPER_TRADING_MODE,REQUIRE_AUTH=true,NL_BUCKET=${_NL_BUCKET}'
+      - '--set-secrets=CLOUD_RUN_API_KEY=neolight-api-key:latest'
+
+images:
+  - 'gcr.io/$PROJECT_ID/neolight-failover:latest'
+
+substitutions:
+  _NL_BUCKET: '${NL_BUCKET}'
+
+options:
+  machineType: 'N1_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+

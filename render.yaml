@@ -1,0 +1,33 @@
+# Render Free Tier Deployment Configuration
+# NeoLight 24/7 Cloud Deployment
+# ============================================
+
+services:
+  - type: web
+    name: neolight-primary
+    env: python
+    plan: free  # Free tier (750 hours/month)
+    region: oregon  # us-west-2 (low latency)
+    buildCommand: pip install -r requirements.txt
+    startCommand: python3 trader/smart_trader.py
+    healthCheckPath: /health
+    envVars:
+      - key: TRADING_MODE
+        value: PAPER_TRADING_MODE
+      - key: PYTHONPATH
+        value: /opt/render/project/src
+      - key: PORT
+        value: 8080
+      - key: RENDER_MODE
+        value: true
+      # Secrets should be added via Render dashboard
+      # - ALPACA_API_KEY (from Secret Manager)
+      # - ALPACA_SECRET_KEY (from Secret Manager)
+      # - RCLONE_REMOTE (from Secret Manager)
+      # - RCLONE_PATH (from Secret Manager)
+
+# Auto-deploy from GitHub
+# Connect your GitHub repo in Render dashboard
+# Render will auto-deploy on push to main branch
+
+

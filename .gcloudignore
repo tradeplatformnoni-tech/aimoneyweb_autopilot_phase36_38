@@ -1,0 +1,130 @@
+# NeoLight .gcloudignore - Exclude unnecessary files from Cloud Build
+# This dramatically speeds up deployment by excluding large directories
+
+# Python virtual environment (will be installed in container)
+venv/
+env/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Logs (not needed in container)
+logs/
+*.log
+*.log.*
+
+# State and runtime (synced separately via gsutil)
+state/
+runtime/
+snapshots/
+data/
+
+# Temporary files
+tmp/
+tmp_*/
+*.tmp
+*.swp
+*.swo
+*~
+
+# Git (not needed)
+.git/
+.gitignore
+.gitattributes
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-*
+.DS_Store
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Test files
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+tests/
+
+# Documentation (not needed in container)
+*.md
+docs/
+*.txt
+!requirements.txt
+
+# Large data files
+*.csv
+*.json
+!package.json
+*.parquet
+*.h5
+*.hdf5
+
+# Node modules (if any)
+node_modules/
+npm-debug.log
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Cloud sync temp directories
+tmp_sync*/
+
+# Large model files (if any)
+models/*.pkl
+models/*.h5
+models/*.pt
+models/*.pth
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Environment files (secrets managed via Secret Manager)
+.env
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Archives (already compressed)
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+
+# Large directories that aren't needed
+archive/
+backups/
+old/
+have/
+or/
+if/
+use/
+you/
+skip/
+already/
+Python/
+
