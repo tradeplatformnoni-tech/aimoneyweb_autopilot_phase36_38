@@ -683,10 +683,41 @@ class FeatureBuilder:
         return X, y, metadata, seen_games, sequence_vectors
 
     def build_future_features(
-        self, cutoff: datetime
+        self, cutoff: datetime, realtime_schedules: dict[str, list[dict[str, Any]]] | None = None
     ) -> list[tuple[GameRecord, list[float], dict[str, Any]]]:
+        """
+        Build features for future games.
+        
+        Args:
+            cutoff: Only include games after this datetime
+            realtime_schedules: Real-time schedule data (if provided, uses these instead of historical)
+        """
         future_games: list[tuple[GameRecord, list[float], dict[str, Any]]] = []
-        for game in self.games:
+        
+        # If real-time schedules provided, convert them to GameRecords first
+        if realtime_schedules and realtime_schedules.get(self.sport):
+            realtime_games = []
+            for game_data in realtime_schedules[self.sport]:
+                try:
+                    game = GameRecord(
+                        game_id=game_data.get("game_id", f"{self.sport}_{game_data.get('id', '')}"),
+                        home_team=game_data.get("home_team", ""),
+                        away_team=game_data.get("away_team", ""),
+                        scheduled=game_data.get("scheduled", datetime.now(UTC).isoformat()),
+                        sport=self.sport,
+                    )
+                    realtime_games.append(game)
+                except Exception as e:
+                    print(f"[sports_analytics] Error converting real-time game: {e}", flush=True)
+                    continue
+            
+            # Use real-time games instead of historical future games
+            games_to_process = realtime_games
+        else:
+            # Fall back to historical future games
+            games_to_process = [g for g in self.games if (parse_datetime(g.scheduled) or datetime.now(UTC)) > cutoff]
+        
+        for game in games_to_process:
             scheduled_dt = parse_datetime(game.scheduled) or datetime.now(UTC)
             if scheduled_dt <= cutoff:
                 continue
