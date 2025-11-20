@@ -20,6 +20,13 @@ ROOT = Path("/opt/render/project/src")
 if not ROOT.exists():
     ROOT = Path(os.path.expanduser("~/neolight"))
 
+# State directory - try Render path first, fallback to local
+STATE_DIR = ROOT / "state"
+if not STATE_DIR.exists() and Path(os.path.expanduser("~/neolight/state")).exists():
+    # If Render state doesn't exist but local does, use local for reading
+    # (Agents will write to Render state, but we can read from local for dashboard)
+    STATE_DIR = Path(os.path.expanduser("~/neolight/state"))
+
 PORT = int(os.getenv("PORT", "8080"))
 
 # Agent definitions (in startup order)
@@ -77,7 +84,7 @@ if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # Dashboard endpoints (simplified for Render)
-STATE_DIR = ROOT / "state"
+# STATE_DIR already defined above with fallback logic
 RUNTIME_DIR = ROOT / "runtime"
 
 
@@ -105,49 +112,72 @@ async def dashboard_home():
 
 @app.get("/api/trades")
 async def get_trades():
-    """Get trading transactions"""
+    """Get trading transactions - reads from Render state or cloud-synced location"""
     pnl_file = STATE_DIR / "pnl_history.csv"
-    if pnl_file.exists():
-        try:
-            import csv
+    
+    # If file doesn't exist, agents may still be generating data
+    if not pnl_file.exists():
+        return {
+            "trades": [],
+            "total": 0,
+            "message": "No trades yet. smart_trader agent is generating data. Historical trades will appear as the agent executes trades. Check again in a few minutes.",
+            "agent_status": "running"  # Agents are running, just need time to generate data
+        }
+    
+    try:
+        import csv
 
-            with open(pnl_file) as f:
-                reader = csv.DictReader(f)
-                trades = list(reader)
-            return {"trades": trades[-50:], "total": len(trades)}  # Last 50 trades
-        except Exception as e:
-            return {"error": str(e), "trades": []}
-    return {"trades": [], "total": 0}
+        with open(pnl_file) as f:
+            reader = csv.DictReader(f)
+            trades = list(reader)
+        
+        # Return last 50 trades (most recent)
+        recent_trades = trades[-50:] if len(trades) > 50 else trades
+        return {"trades": recent_trades, "total": len(trades)}
+    except Exception as e:
+        return {"error": str(e), "trades": [], "total": 0}
 
 
 @app.get("/api/betting")
 async def get_betting_results():
-    """Get sports betting results"""
+    """Get sports betting results - reads from Render state"""
     results = {}
+    
+    betting_file = STATE_DIR / "sports_paper_trades.json"
+    bankroll_file = STATE_DIR / "sports_bankroll.json"
+    predictions_file = STATE_DIR / "sports_predictions.json"
 
     # Betting history
-    betting_file = STATE_DIR / "sports_paper_trades.json"
     if betting_file.exists():
         try:
             results["history"] = json.loads(betting_file.read_text())
         except Exception:
             results["history"] = []
+    else:
+        results["history"] = []
 
     # Bankroll
-    bankroll_file = STATE_DIR / "sports_bankroll.json"
     if bankroll_file.exists():
         try:
             results["bankroll"] = json.loads(bankroll_file.read_text())
         except Exception:
             results["bankroll"] = {"bankroll": 1000, "initial_bankroll": 1000}
+    else:
+        results["bankroll"] = {"bankroll": 1000, "initial_bankroll": 1000}
 
     # Predictions
-    predictions_file = STATE_DIR / "sports_predictions.json"
     if predictions_file.exists():
         try:
             results["predictions"] = json.loads(predictions_file.read_text())
         except Exception:
             results["predictions"] = []
+    else:
+        results["predictions"] = []
+    
+    # Add message if no data
+    if not results.get("history") and not results.get("predictions"):
+        results["message"] = "No betting data yet. sports_betting agent is running and will generate data. Historical data will appear as the agent processes predictions. Check again in 30-60 minutes."
+        results["agent_status"] = "running"
 
     return results
 
@@ -314,6 +344,55 @@ def run_agent(agent_name: str, agent_config: dict) -> None:
             time.sleep(restart_delay)
 
 
+def sync_state_from_cloud():
+    """Sync state from cloud storage (rclone) to Render state directory"""
+    try:
+        rclone_remote = os.getenv("RCLONE_REMOTE", "")
+        rclone_path = os.getenv("RCLONE_PATH", "neolight/state")
+        
+        if not rclone_remote:
+            print("⚠️ RCLONE_REMOTE not set, skipping state sync")
+            return False
+        
+        # Check if rclone is available
+        import subprocess
+        result = subprocess.run(
+            ["which", "rclone"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            print("⚠️ rclone not available, skipping state sync")
+            return False
+        
+        print(f"☁️ Syncing state from {rclone_remote}:{rclone_path}...")
+        
+        # Sync state from cloud to Render state directory
+        sync_result = subprocess.run(
+            [
+                "rclone", "copy",
+                f"{rclone_remote}:{rclone_path}",
+                str(STATE_DIR),
+                "--create-empty-src-dirs",
+                "--transfers", "4",
+                "--checkers", "8",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        if sync_result.returncode == 0:
+            print("✅ State synced from cloud successfully")
+            return True
+        else:
+            print(f"⚠️ State sync failed: {sync_result.stderr[:200]}")
+            return False
+    except Exception as e:
+        print(f"⚠️ State sync error: {e}")
+        return False
+
+
 @app.on_event("startup")
 async def startup_event():
     """Start all agents in background threads"""
@@ -322,6 +401,9 @@ async def startup_event():
     print("🚀 Starting NeoLight Multi-Agent Render Service...")
     print(f"📁 Root: {ROOT}")
     print(f"🌐 Port: {PORT}")
+    
+    # Sync state from cloud on startup (if available)
+    sync_state_from_cloud()
 
     # Sort agents by priority
     sorted_agents = sorted(AGENTS.items(), key=lambda x: x[1]["priority"])
