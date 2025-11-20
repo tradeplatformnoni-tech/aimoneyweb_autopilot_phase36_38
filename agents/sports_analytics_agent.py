@@ -1665,6 +1665,15 @@ def process_sport(sport: str) -> dict[str, Any]:
 
     games = load_game_history(sport, seasons)
     odds = load_odds_history(sport, seasons)
+    
+    # EINSTEIN-LEVEL FIX: Fetch real-time schedules for today
+    try:
+        from agents.sports_realtime_schedule import fetch_realtime_schedules
+        realtime_schedules = fetch_realtime_schedules([sport])
+        print(f"[sports_analytics] ✅ Fetched real-time schedule for {sport}: {len(realtime_schedules.get(sport, []))} games", flush=True)
+    except Exception as e:
+        print(f"[sports_analytics] ⚠️ Real-time schedule fetch failed: {e}, using historical data", flush=True)
+        realtime_schedules = None
 
     if not games:
         return fallback_predictions([], sport)
@@ -1725,7 +1734,11 @@ def process_sport(sport: str) -> dict[str, Any]:
         regime: bundle.get("metadata") for regime, bundle in models_by_regime.items()
     }
 
-    future_entries = builder.build_future_features(datetime.now(UTC))
+    # Use real-time schedules if available, otherwise fall back to historical
+    future_entries = builder.build_future_features(
+        datetime.now(UTC),
+        realtime_schedules=realtime_schedules if realtime_schedules else None
+    )
 
     predictions = []
     for game, feature_vector, meta in future_entries:
