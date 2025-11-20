@@ -137,6 +137,7 @@ async def health():
     )
 
 
+# Note: Render uses uvicorn command directly, so this block is for local testing only
 if __name__ == "__main__":
     import uvicorn
 
