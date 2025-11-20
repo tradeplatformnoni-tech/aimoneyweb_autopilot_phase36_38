@@ -3,6 +3,7 @@
 Render Web Service - Multi-Agent Orchestration
 Provides HTTP health endpoint while running multiple NeoLight agents in background
 """
+import json
 import os
 import subprocess
 import sys
@@ -11,7 +12,8 @@ import time
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 # Configuration
 ROOT = Path("/opt/render/project/src")
@@ -52,10 +54,165 @@ AGENTS = {
         "required": True,
         "description": "SmartTrader (main trading loop)",
     },
+    "sports_betting": {
+        "script": ROOT / "agents" / "sports_betting_agent.py",
+        "priority": 6,
+        "required": False,
+        "description": "Sports Betting Agent (paper trading, manual BetMGM workflow)",
+    },
+    "dropship_agent": {
+        "script": ROOT / "agents" / "dropship_agent.py",
+        "priority": 7,
+        "required": False,
+        "description": "Dropshipping Agent (multi-platform: Etsy, Mercari, Poshmark, TikTok Shop)",
+    },
 }
 
 # FastAPI app
 app = FastAPI(title="NeoLight Multi-Agent Render Service", version="2.0.0")
+
+# Mount static files for dashboard
+STATIC_DIR = ROOT / "dashboard" / "static"
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# Dashboard endpoints (simplified for Render)
+STATE_DIR = ROOT / "state"
+RUNTIME_DIR = ROOT / "runtime"
+
+
+@app.get("/dashboard")
+async def dashboard_home():
+    """Dashboard home page - redirects to local dashboard or shows status"""
+    dashboard_html = ROOT / "dashboard" / "sports_dashboard.html"
+    if dashboard_html.exists():
+        return FileResponse(dashboard_html)
+
+    # Simple status page if dashboard not available
+    return HTMLResponse(
+        content="""
+        <html>
+        <head><title>NeoLight Dashboard</title></head>
+        <body style="font-family: monospace; padding: 20px;">
+            <h1>NeoLight Multi-Agent System</h1>
+            <p>Dashboard: <a href="/api/trades">Trades</a> | <a href="/api/betting">Betting</a> | <a href="/api/revenue">Revenue</a></p>
+            <p>For full dashboard, access locally at: http://localhost:8090</p>
+        </body>
+        </html>
+        """
+    )
+
+
+@app.get("/api/trades")
+async def get_trades():
+    """Get trading transactions"""
+    pnl_file = STATE_DIR / "pnl_history.csv"
+    if pnl_file.exists():
+        try:
+            import csv
+
+            with open(pnl_file) as f:
+                reader = csv.DictReader(f)
+                trades = list(reader)
+            return {"trades": trades[-50:], "total": len(trades)}  # Last 50 trades
+        except Exception as e:
+            return {"error": str(e), "trades": []}
+    return {"trades": [], "total": 0}
+
+
+@app.get("/api/betting")
+async def get_betting_results():
+    """Get sports betting results"""
+    results = {}
+
+    # Betting history
+    betting_file = STATE_DIR / "sports_paper_trades.json"
+    if betting_file.exists():
+        try:
+            results["history"] = json.loads(betting_file.read_text())
+        except Exception:
+            results["history"] = []
+
+    # Bankroll
+    bankroll_file = STATE_DIR / "sports_bankroll.json"
+    if bankroll_file.exists():
+        try:
+            results["bankroll"] = json.loads(bankroll_file.read_text())
+        except Exception:
+            results["bankroll"] = {"bankroll": 1000, "initial_bankroll": 1000}
+
+    # Predictions
+    predictions_file = STATE_DIR / "sports_predictions.json"
+    if predictions_file.exists():
+        try:
+            results["predictions"] = json.loads(predictions_file.read_text())
+        except Exception:
+            results["predictions"] = []
+
+    return results
+
+
+@app.get("/api/revenue")
+async def get_revenue():
+    """Get revenue by agent"""
+    revenue_file = STATE_DIR / "revenue_by_agent.json"
+    if revenue_file.exists():
+        try:
+            return json.loads(revenue_file.read_text())
+        except Exception:
+            pass
+
+    # Dropshipping revenue
+    dropship_file = STATE_DIR / "dropship_profit.csv"
+    dropship_revenue = 0
+    if dropship_file.exists():
+        try:
+            import csv
+
+            with open(dropship_file) as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    dropship_revenue += float(row.get("profit", 0) or 0)
+        except Exception:
+            pass
+
+    return {
+        "agents": [
+            {"name": "smart_trader", "revenue": 0, "cost": 0, "net_pnl": 0},
+            {"name": "sports_betting", "revenue": 0, "cost": 0, "net_pnl": 0},
+            {
+                "name": "dropship_agent",
+                "revenue": dropship_revenue,
+                "cost": 0,
+                "net_pnl": dropship_revenue,
+            },
+        ]
+    }
+
+
+@app.get("/api/sports/predictions")
+async def get_sports_predictions():
+    """Get sports predictions"""
+    predictions_file = STATE_DIR / "sports_predictions.json"
+    if predictions_file.exists():
+        try:
+            return json.loads(predictions_file.read_text())
+        except Exception:
+            return {"predictions": []}
+    return {"predictions": []}
+
+
+@app.get("/api/sports/history")
+async def get_sports_history():
+    """Get sports betting history"""
+    history_file = STATE_DIR / "sports_paper_trades.json"
+    if history_file.exists():
+        try:
+            return json.loads(history_file.read_text())
+        except Exception:
+            return []
+    return []
+
 
 # Global state
 agent_processes: dict[str, subprocess.Popen | None] = {}
