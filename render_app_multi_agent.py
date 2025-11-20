@@ -61,9 +61,15 @@ AGENTS = {
         "required": True,
         "description": "SmartTrader (main trading loop)",
     },
+    "sports_analytics": {
+        "script": ROOT / "agents" / "sports_analytics_agent.py",
+        "priority": 5,  # Must run before sports_betting
+        "required": False,
+        "description": "Sports Analytics Agent (generates predictions for live/today games)",
+    },
     "sports_betting": {
         "script": ROOT / "agents" / "sports_betting_agent.py",
-        "priority": 6,
+        "priority": 6,  # Runs after sports_analytics
         "required": False,
         "description": "Sports Betting Agent (paper trading, manual BetMGM workflow)",
     },
