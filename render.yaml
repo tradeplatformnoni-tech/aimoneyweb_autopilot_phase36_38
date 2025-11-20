@@ -6,7 +6,7 @@ services:
   - type: web
     name: neolight-primary
     env: python
-    pythonVersion: 3.11  # Use Python 3.11 for prebuilt wheels (pandas/numpy/scipy)
+    # Note: Python version must be set in Render dashboard (Settings → Runtime → Python Version → 3.11)
     plan: free  # Free tier (750 hours/month)
     region: oregon  # us-west-2 (low latency)
     buildCommand: pip install -r requirements_render.txt
