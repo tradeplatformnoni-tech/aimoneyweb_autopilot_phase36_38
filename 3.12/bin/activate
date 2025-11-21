@@ -51,7 +51,7 @@ case "$(uname)" in
 esac
 
 _OLD_VIRTUAL_PATH="$PATH"
-PATH="$VIRTUAL_ENV/"bin":$PATH"
+PATH="$VIRTUAL_ENV/bin:$PATH"
 export PATH
 
 VIRTUAL_ENV_PROMPT='(3.12) '

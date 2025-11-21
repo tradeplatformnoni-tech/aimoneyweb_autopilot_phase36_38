@@ -37,19 +37,3 @@ while true; do
 
   sleep "${FAST_INTERVAL_SECONDS}"
 done
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
