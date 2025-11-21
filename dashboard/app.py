@@ -46,8 +46,15 @@ try:
         get_traces,
     )
     HAS_OBSERVABILITY = True
-except ImportError:
+    print("[dashboard] ✅ Observability module imported successfully", flush=True)
+except ImportError as e:
     HAS_OBSERVABILITY = False
+    print(f"[dashboard] ⚠️ Observability module import failed: {e}", flush=True)
+except Exception as e:
+    HAS_OBSERVABILITY = False
+    print(f"[dashboard] ⚠️ Observability module error: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
 
 # Shared market universe context
 try:
@@ -1280,6 +1287,7 @@ def get_events(type: Optional[str] = None):
 
 # Observability endpoints
 if HAS_OBSERVABILITY:
+    print("[dashboard] ✅ Registering observability routes", flush=True)
     @app.get("/observability/summary")
     def get_observability_summary_endpoint():
         """Get comprehensive observability summary."""
