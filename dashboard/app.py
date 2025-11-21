@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 UTC = timezone.utc  # Python 3.9+ compatibility
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -124,7 +124,7 @@ def _load_allocation_groups() -> dict[str, dict[str, Any]]:
     return {"allocations": allocations, "groups": groups}
 
 
-def _fetch_panel_prices(symbols: list[str]) -> dict[str, float | None]:
+def _fetch_panel_prices(symbols: list[str]) -> dict[str, Optional[float]]:
     """Fetch latest prices for requested symbols via yfinance."""
     prices: dict[str, float | None] = dict.fromkeys(symbols)
     if not symbols:
