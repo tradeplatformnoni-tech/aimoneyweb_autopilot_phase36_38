@@ -152,7 +152,10 @@ OPTUNA_TRIALS = int(os.getenv("SPORTS_OPTUNA_TRIALS", "20"))
 OPTUNA_TIMEOUT = int(os.getenv("SPORTS_OPTUNA_TIMEOUT", "180"))
 OPTUNA_MIN_SAMPLES = int(os.getenv("SPORTS_OPTUNA_MIN_SAMPLES", "150"))
 OPTUNA_SEED = int(os.getenv("SPORTS_OPTUNA_SEED", "42"))
-USE_TRANSFORMER_SEQUENCE = os.getenv("SPORTS_USE_TRANSFORMER", "true").lower() == "true"
+# Default to False if TensorFlow not available or unreliable
+USE_TRANSFORMER_SEQUENCE = (
+    HAS_TENSORFLOW and os.getenv("SPORTS_USE_TRANSFORMER", "false").lower() == "true"
+)
 TRANSFORMER_HEADS = int(os.getenv("SPORTS_TRANSFORMER_HEADS", "4"))
 TRANSFORMER_DFF = int(os.getenv("SPORTS_TRANSFORMER_DFF", "64"))
 TRANSFORMER_DROPOUT = float(os.getenv("SPORTS_TRANSFORMER_DROPOUT", "0.2"))
@@ -687,13 +690,13 @@ class FeatureBuilder:
     ) -> list[tuple[GameRecord, list[float], dict[str, Any]]]:
         """
         Build features for future games.
-        
+
         Args:
             cutoff: Only include games after this datetime
             realtime_schedules: Real-time schedule data (if provided, uses these instead of historical)
         """
         future_games: list[tuple[GameRecord, list[float], dict[str, Any]]] = []
-        
+
         # If real-time schedules provided, convert them to GameRecords first
         if realtime_schedules and realtime_schedules.get(self.sport):
             realtime_games = []
@@ -710,13 +713,15 @@ class FeatureBuilder:
                 except Exception as e:
                     print(f"[sports_analytics] Error converting real-time game: {e}", flush=True)
                     continue
-            
+
             # Use real-time games instead of historical future games
             games_to_process = realtime_games
         else:
             # Fall back to historical future games
-            games_to_process = [g for g in self.games if (parse_datetime(g.scheduled) or datetime.now(UTC)) > cutoff]
-        
+            games_to_process = [
+                g for g in self.games if (parse_datetime(g.scheduled) or datetime.now(UTC)) > cutoff
+            ]
+
         for game in games_to_process:
             scheduled_dt = parse_datetime(game.scheduled) or datetime.now(UTC)
             if scheduled_dt <= cutoff:
@@ -1696,14 +1701,21 @@ def process_sport(sport: str) -> dict[str, Any]:
 
     games = load_game_history(sport, seasons)
     odds = load_odds_history(sport, seasons)
-    
+
     # EINSTEIN-LEVEL FIX: Fetch real-time schedules for today
     try:
         from agents.sports_realtime_schedule import fetch_realtime_schedules
+
         realtime_schedules = fetch_realtime_schedules([sport])
-        print(f"[sports_analytics] ✅ Fetched real-time schedule for {sport}: {len(realtime_schedules.get(sport, []))} games", flush=True)
+        print(
+            f"[sports_analytics] ✅ Fetched real-time schedule for {sport}: {len(realtime_schedules.get(sport, []))} games",
+            flush=True,
+        )
     except Exception as e:
-        print(f"[sports_analytics] ⚠️ Real-time schedule fetch failed: {e}, using historical data", flush=True)
+        print(
+            f"[sports_analytics] ⚠️ Real-time schedule fetch failed: {e}, using historical data",
+            flush=True,
+        )
         realtime_schedules = None
 
     if not games:
@@ -1767,8 +1779,7 @@ def process_sport(sport: str) -> dict[str, Any]:
 
     # Use real-time schedules if available, otherwise fall back to historical
     future_entries = builder.build_future_features(
-        datetime.now(UTC),
-        realtime_schedules=realtime_schedules if realtime_schedules else None
+        datetime.now(UTC), realtime_schedules=realtime_schedules if realtime_schedules else None
     )
 
     predictions = []
