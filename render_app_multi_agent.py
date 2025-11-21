@@ -551,6 +551,67 @@ async def agent_detail(agent_name: str):
     }
 
 
+# Observability endpoints
+try:
+    from dashboard.observability import (
+        get_agent_status,
+        get_anomaly_detections,
+        get_failure_predictions,
+        get_metrics,
+        get_observability_summary,
+        get_traces,
+    )
+    HAS_OBSERVABILITY = True
+    print("[render_app] ✅ Observability module imported successfully", flush=True)
+except ImportError as e:
+    HAS_OBSERVABILITY = False
+    print(f"[render_app] ⚠️ Observability module import failed: {e}", flush=True)
+except Exception as e:
+    HAS_OBSERVABILITY = False
+    print(f"[render_app] ⚠️ Observability module error: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
+
+
+if HAS_OBSERVABILITY:
+    print("[render_app] ✅ Registering observability routes", flush=True)
+    
+    @app.get("/observability/summary")
+    async def get_observability_summary_endpoint():
+        """Get observability summary."""
+        return get_observability_summary()
+
+    @app.get("/observability/agents")
+    async def get_observability_agents():
+        """Get agent status for observability."""
+        return get_agent_status()
+
+    @app.get("/observability/predictions")
+    async def get_observability_predictions():
+        """Get failure predictions."""
+        return get_failure_predictions()
+
+    @app.get("/observability/anomalies")
+    async def get_observability_anomalies():
+        """Get anomaly detections."""
+        return get_anomaly_detections()
+
+    @app.get("/observability/metrics")
+    async def get_observability_metrics():
+        """Get metrics."""
+        return get_metrics()
+
+    @app.get("/observability/traces")
+    async def get_observability_traces():
+        """Get traces."""
+        return get_traces()
+
+    @app.get("/metrics")
+    async def get_prometheus_metrics():
+        """Prometheus-compatible metrics endpoint."""
+        return get_metrics()
+
+
 # Note: Render uses uvicorn command directly, so this block is for local testing only
 if __name__ == "__main__":
     import uvicorn
