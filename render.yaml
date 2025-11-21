@@ -23,6 +23,8 @@ services:
         value: true
       - key: SPORTS_USE_TRANSFORMER
         value: "false"
+      - key: SPORTS_SKIP_BACKFILL
+        value: "true"
       # Secrets should be added via Render dashboard
       # - ALPACA_API_KEY (from Secret Manager)
       # - ALPACA_SECRET_KEY (from Secret Manager)

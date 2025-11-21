@@ -1699,11 +1699,22 @@ def fallback_predictions(games: list[GameRecord], sport: str) -> dict[str, Any]:
 def process_sport(sport: str) -> dict[str, Any]:
     seasons = generate_season_list(YEARS_OF_HISTORY)
 
-    if sport == "soccer":
-        backfill_soccer_history(seasons, SOCCER_LEAGUES)
+    # Skip backfill on Render to speed up startup (data should be pre-loaded)
+    # Only backfill if explicitly enabled or if no data exists
+    SKIP_BACKFILL = os.getenv("SPORTS_SKIP_BACKFILL", "true").lower() == "true"
+    
+    if not SKIP_BACKFILL:
+        print(f"[sports_analytics] Backfilling history for {sport}...", flush=True)
+        try:
+            if sport == "soccer":
+                backfill_soccer_history(seasons, SOCCER_LEAGUES)
+            else:
+                backfill_sportradar_history(sport, seasons)
+            backfill_odds_history(sport, seasons)
+        except Exception as e:
+            print(f"[sports_analytics] ⚠️ Backfill failed: {e}, using existing data", flush=True)
     else:
-        backfill_sportradar_history(sport, seasons)
-    backfill_odds_history(sport, seasons)
+        print(f"[sports_analytics] Skipping backfill for {sport} (using existing data)", flush=True)
 
     games = load_game_history(sport, seasons)
     odds = load_odds_history(sport, seasons)
