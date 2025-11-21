@@ -1964,12 +1964,16 @@ def main() -> None:
             break
         except Exception as exc:
             consecutive_errors += 1
-            print(f"[sports_analytics] Error: {exc}", flush=True)
+            print(f"[sports_analytics] ❌ CRITICAL ERROR: {exc}", flush=True)
             traceback.print_exc()
             if consecutive_errors >= max_consecutive_errors:
-                print(f"[sports_analytics] ❌ Too many consecutive errors ({consecutive_errors}), exiting", flush=True)
-                sys.exit(1)
-            time.sleep(300)
+                print(f"[sports_analytics] ❌ Too many consecutive errors ({consecutive_errors})", flush=True)
+                print(f"[sports_analytics] ⏳ Entering extended cooldown (300s) - will retry after", flush=True)
+                # DON'T EXIT - enter extended cooldown and retry
+                consecutive_errors = 0  # Reset for next attempt
+                time.sleep(300)  # Extended cooldown
+            else:
+                time.sleep(60)  # Short delay before retry
 
 
 if __name__ == "__main__":
