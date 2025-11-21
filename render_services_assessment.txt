@@ -1,0 +1,12 @@
+# Render Services Assessment
+# ==========================
+# Date: $(date)
+# 
+# Instructions:
+# 1. For each service in Render dashboard, fill in the details below
+# 2. Mark action: KEEP, SUSPEND, or DELETE
+# 3. Export any useful data before deleting
+#
+# Format:
+# Service Name | Type | Last Deployed | Status | Cost | Has Data | Action | Notes
+# -------------|------|---------------|--------|------|----------|--------|------

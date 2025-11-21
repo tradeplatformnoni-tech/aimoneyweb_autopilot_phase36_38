@@ -1,0 +1,75 @@
+# NeoLight Docker Ignore
+# ======================
+# Exclude unnecessary files from Docker build
+
+# Local development
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# State and runtime (synced separately)
+state/
+runtime/
+logs/
+snapshots/
+tmp/
+tmp_sync*/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation
+*.md
+!README.md
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+test_*
+*_test.py
+*_tests.py
+
+# Environment files (secrets handled via Fly.io secrets)
+.env
+.env.*
+!env.example
+
+# Large data files
+data/raw/
+data/processed/
+*.csv
+*.parquet
+*.h5
+*.hdf5
+
+# Model files (too large for Docker)
+models/*.pkl
+models/*.h5
+models/*.joblib
+
+# Archive
+archive/

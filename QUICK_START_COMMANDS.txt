@@ -1,0 +1,20 @@
+# NeoLight Quick Start Commands
+# =============================
+
+# 1. Simple Launch
+python3 trader/smart_trader.py
+
+# 2. With Custom Configuration
+export PORTFOLIO_OPT_CYCLE="100"
+export RISK_ASSESSMENT_CYCLE="200"
+export TRADING_MODE="PAPER_TRADING_MODE"
+python3 trader/smart_trader.py
+
+# 3. Enterprise Launcher
+./scripts/start_paper_trading.sh
+
+# 4. View Logs
+tail -f logs/smart_trader.log
+
+# 5. Check Allocations
+cat state/allocations.json

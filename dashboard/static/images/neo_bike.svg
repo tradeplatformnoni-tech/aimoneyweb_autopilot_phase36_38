@@ -1,0 +1,29 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06112a"/>
+      <stop offset="100%" stop-color="#02060f"/>
+    </linearGradient>
+    <linearGradient id="bike" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff8b2a"/>
+      <stop offset="100%" stop-color="#fec168"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="rgba(0,246,255,0.55)"/>
+      <stop offset="100%" stop-color="rgba(0,246,255,0)"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="150" cy="360" r="120" stroke="url(#bike)" stroke-width="10" fill="none" opacity="0.65"/>
+  <circle cx="370" cy="360" r="120" stroke="url(#bike)" stroke-width="10" fill="none" opacity="0.65"/>
+  <circle cx="150" cy="360" r="60" stroke="#0ff6ff" stroke-width="4" fill="rgba(0,246,255,0.1)"/>
+  <circle cx="370" cy="360" r="60" stroke="#0ff6ff" stroke-width="4" fill="rgba(0,246,255,0.1)"/>
+  <path d="M120 200 L220 220 L280 170 L360 180 L400 260" stroke="url(#bike)" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M260 160 C250 130 270 110 300 110 C330 110 350 130 350 168" stroke="#0ff6ff" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <path d="M320 120 L352 190" stroke="#0ff6ff" stroke-width="5" stroke-linecap="round"/>
+  <ellipse cx="256" cy="430" rx="210" ry="60" fill="url(#glow)" opacity="0.55"/>
+  <path d="M90 330 Q120 300 180 310 Q260 320 320 300 Q380 280 420 300" stroke="#ff8b2a" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="12 10"/>
+  <text x="30" y="70" fill="#ff8b2a" font-family="IBM Plex Mono, monospace" font-size="18" letter-spacing="6">NEO OPS // BIKE OPS</text>
+  <text x="30" y="102" fill="#00f6ff" font-family="IBM Plex Mono, monospace" font-size="12" letter-spacing="4">VECTOR PLACEHOLDER</text>
+</svg>
+

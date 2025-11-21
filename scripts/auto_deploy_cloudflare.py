@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Automated Cloudflare Worker Deployment via API
-Deploys NeoLight API proxy to Cloudflare Workers
+Automated Cloudflare Worker Deployment
+Deploys NeoLight keep-alive worker to Cloudflare
 """
 import os
 import sys
@@ -12,7 +12,12 @@ from pathlib import Path
 # Configuration
 CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN")
 CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID")
+RENDER_SERVICE_URL = os.getenv("RENDER_SERVICE_URL", "").replace("https://", "").replace("http://", "").rstrip("/")
 ROOT = Path(__file__).parent.parent
+WORKER_NAME = "neolight-keepalive"
+WORKER_FILE = ROOT / "cloudflare_worker_keepalive_sw.js"  # Use service worker format
+
+CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4"
 
 def get_headers():
     if not CLOUDFLARE_API_TOKEN:
@@ -22,96 +27,70 @@ def get_headers():
         "Content-Type": "application/javascript"
     }
 
-def get_worker_code(render_url):
-    """Get the Cloudflare Worker code with Render URL filled in"""
-    worker_file = ROOT / "cloudflare_worker_ready.js"
-    if not worker_file.exists():
-        raise FileNotFoundError(f"Worker code file not found: {worker_file}")
+def read_worker_code():
+    """Read and prepare worker code"""
+    if not WORKER_FILE.exists():
+        raise FileNotFoundError(f"Worker file not found: {WORKER_FILE}")
     
-    with open(worker_file) as f:
+    with open(WORKER_FILE, 'r') as f:
         code = f.read()
     
-    # Replace RENDER_URL placeholder
-    code = code.replace("YOUR_RENDER_SERVICE_URL.onrender.com", render_url)
-    code = code.replace("'YOUR_RENDER_SERVICE_URL.onrender.com'", f"'{render_url}'")
+    # Replace placeholder with actual Render URL
+    if RENDER_SERVICE_URL:
+        code = code.replace("YOUR_RENDER_SERVICE_URL.onrender.com", RENDER_SERVICE_URL)
+        print(f"✅ Updated Render URL to: {RENDER_SERVICE_URL}")
+    else:
+        print("⚠️  WARNING: RENDER_SERVICE_URL not set. Worker will use placeholder URL.")
+        print("   Set it with: export RENDER_SERVICE_URL='https://your-service.onrender.com'")
     
     return code
 
-def create_or_update_worker(worker_name, code):
-    """Create or update Cloudflare Worker"""
+def check_existing_worker():
+    """Check if worker already exists"""
     headers = get_headers()
-    
+    response = requests.get(
+        f"{CLOUDFLARE_API_BASE}/accounts/{CLOUDFLARE_ACCOUNT_ID}/workers/scripts/{WORKER_NAME}",
+        headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}"}
+    )
+    return response.status_code == 200
+
+def deploy_worker():
+    """Deploy worker to Cloudflare"""
     if not CLOUDFLARE_ACCOUNT_ID:
         raise ValueError("CLOUDFLARE_ACCOUNT_ID environment variable not set")
     
-    url = f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/workers/scripts/{worker_name}"
+    worker_code = read_worker_code()
     
-    print(f"🚀 Deploying Cloudflare Worker '{worker_name}'...")
-    
-    # Try to update first (if exists)
-    response = requests.put(
-        url,
-        headers=headers,
-        data=code
-    )
-    
-    if response.status_code == 200:
-        print(f"✅ Worker updated successfully")
-        return True
-    
-    # If update fails, try to create
-    if response.status_code == 404:
-        print(f"  Worker doesn't exist, creating new one...")
-        # For creation, we need to use a different endpoint
-        create_url = f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/workers/scripts"
-        response = requests.put(
-            create_url,
-            headers=headers,
-            data=code,
-            params={"name": worker_name}
-        )
-        
-        if response.status_code in [200, 201]:
-            print(f"✅ Worker created successfully")
-            return True
-    
-    # Error
-    error = response.text
-    print(f"❌ Failed to deploy worker: {error}")
-    raise Exception(f"Failed to deploy worker: {error}")
-
-def add_scheduled_event(worker_name, cron_expression="*/10 * * * *"):
-    """Add scheduled event (cron trigger) to worker"""
+    # Cloudflare Workers API - use simple PUT for service worker format
+    print(f"🚀 Deploying worker '{WORKER_NAME}'...")
     
     headers = {
         "Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/javascript"
     }
     
-    if not CLOUDFLARE_ACCOUNT_ID:
-        raise ValueError("CLOUDFLARE_ACCOUNT_ID environment variable not set")
+    response = requests.put(
+        f"{CLOUDFLARE_API_BASE}/accounts/{CLOUDFLARE_ACCOUNT_ID}/workers/scripts/{WORKER_NAME}",
+        headers=headers,
+        data=worker_code
+    )
     
-    # Create scheduled event
-    url = f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/workers/scripts/{worker_name}/schedules"
-    
-    payload = {
-        "cron": cron_expression
-    }
-    
-    print(f"📅 Adding scheduled event (every 10 minutes)...")
-    response = requests.post(url, headers=headers, json=payload)
-    
-    if response.status_code in [200, 201]:
-        print(f"✅ Scheduled event added")
-        return True
-    elif response.status_code == 409:
-        print(f"  ℹ️  Scheduled event already exists")
-        return True
-    else:
+    if response.status_code not in [200, 201]:
         error = response.text
-        print(f"⚠️  Warning: Failed to add scheduled event: {error}")
-        print(f"  You can add it manually in Cloudflare dashboard")
-        return False
+        print(f"❌ Failed to deploy worker: {error}")
+        raise Exception(f"Failed to deploy worker: {error}")
+    
+    print(f"✅ Worker deployed successfully")
+    
+    # Get worker route (URL)
+    route_response = requests.get(
+        f"{CLOUDFLARE_API_BASE}/accounts/{CLOUDFLARE_ACCOUNT_ID}/workers/scripts/{WORKER_NAME}/routes",
+        headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}"}
+    )
+    
+    worker_url = f"https://{WORKER_NAME}.{CLOUDFLARE_ACCOUNT_ID}.workers.dev"
+    
+    return worker_url
 
 def main():
     print("=" * 60)
@@ -119,13 +98,13 @@ def main():
     print("=" * 60)
     print()
     
-    # Check API credentials
+    # Check credentials
     if not CLOUDFLARE_API_TOKEN:
         print("❌ ERROR: CLOUDFLARE_API_TOKEN not set")
         print()
         print("To get your API token:")
         print("  1. Go to: https://dash.cloudflare.com/profile/api-tokens")
-        print("  2. Create Token → Edit Cloudflare Workers")
+        print("  2. Create API Token with 'Workers:Edit' permission")
         print("  3. Run: export CLOUDFLARE_API_TOKEN='your_token_here'")
         sys.exit(1)
     
@@ -135,47 +114,24 @@ def main():
         print("To get your Account ID:")
         print("  1. Go to: https://dash.cloudflare.com")
         print("  2. Select your account")
-        print("  3. Right sidebar → Account ID")
+        print("  3. Copy Account ID from right sidebar")
         print("  4. Run: export CLOUDFLARE_ACCOUNT_ID='your_account_id'")
         sys.exit(1)
     
-    # Get Render URL
-    render_url = os.getenv("RENDER_SERVICE_URL")
-    if not render_url:
-        # Try to read from service info file
-        service_info_file = ROOT / "run" / "render_service_info.json"
-        if service_info_file.exists():
-            with open(service_info_file) as f:
-                service_info = json.load(f)
-                render_url = service_info.get("service_url", "").replace("https://", "").replace("http://", "")
-        
-        if not render_url:
-            print("⚠️  RENDER_SERVICE_URL not set")
-            print("   Please provide your Render service URL (without https://)")
-            render_url = input("Render service URL (e.g., neolight-primary.onrender.com): ").strip()
-    
-    if not render_url:
-        print("❌ ERROR: Render service URL is required")
-        sys.exit(1)
-    
-    # Remove https:// if present
-    render_url = render_url.replace("https://", "").replace("http://", "")
-    
-    worker_name = "neolight-api"
+    # Check if Render URL is set
+    if not RENDER_SERVICE_URL:
+        print("⚠️  WARNING: RENDER_SERVICE_URL not set")
+        print("   Worker will be deployed but will use placeholder URL")
+        print("   Set it with: export RENDER_SERVICE_URL='https://your-service.onrender.com'")
+        print()
+        response = input("Continue anyway? (y/n): ")
+        if response.lower() != 'y':
+            print("Deployment cancelled")
+            sys.exit(0)
     
     try:
-        # Get worker code
-        print(f"📄 Reading worker code...")
-        code = get_worker_code(render_url)
-        print(f"  ✅ Code prepared (Render URL: {render_url})")
-        
         # Deploy worker
-        print()
-        create_or_update_worker(worker_name, code)
-        
-        # Add scheduled event
-        print()
-        add_scheduled_event(worker_name)
+        worker_url = deploy_worker()
         
         # Output results
         print()
@@ -183,15 +139,30 @@ def main():
         print("✅ DEPLOYMENT COMPLETE")
         print("=" * 60)
         print()
-        print(f"Worker Name: {worker_name}")
-        print(f"Worker URL: https://{worker_name}.YOUR_SUBDOMAIN.workers.dev")
-        print(f"Render URL: {render_url}")
+        print(f"Worker Name: {WORKER_NAME}")
+        print(f"Worker URL: {worker_url}")
+        print()
+        print("📋 Test your worker:")
+        print(f"  curl {worker_url}/keepalive")
+        print(f"  curl {worker_url}/health")
         print()
         print("📋 Next Steps:")
-        print("  1. Test the worker:")
-        print(f"     curl https://{worker_name}.YOUR_SUBDOMAIN.workers.dev/health")
-        print("  2. Start orchestrator: bash scripts/cloud_orchestrator.sh start")
+        print("  1. Test the keep-alive endpoint:")
+        print(f"     curl {worker_url}/keepalive")
+        print("  2. Start orchestrator:")
+        print("     bash scripts/cloud_orchestrator.sh start")
         print()
+        
+        # Save to file
+        output_file = ROOT / "run" / "cloudflare_worker_info.json"
+        output_file.parent.mkdir(exist_ok=True)
+        with open(output_file, "w") as f:
+            json.dump({
+                "worker_name": WORKER_NAME,
+                "worker_url": worker_url,
+                "render_service_url": RENDER_SERVICE_URL or "NOT_SET"
+            }, f, indent=2)
+        print(f"💾 Worker info saved to: {output_file}")
         
     except Exception as e:
         print()
@@ -203,9 +174,9 @@ def main():
         print("Troubleshooting:")
         print("  1. Check your CLOUDFLARE_API_TOKEN is valid")
         print("  2. Verify CLOUDFLARE_ACCOUNT_ID is correct")
-        print("  3. Ensure you have Workers permissions")
+        print("  3. Ensure token has 'Workers:Edit' permission")
+        print("  4. Check Cloudflare API status: https://www.cloudflarestatus.com")
         sys.exit(1)
 
 if __name__ == "__main__":
     main()
-

@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeoLight Sports Betting Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-2.20.0.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        .stat-card h3 {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        .stat-card .value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stat-card .change {
+            font-size: 0.9em;
+            opacity: 0.7;
+        }
+        .section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        .section h2 {
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        th {
+            background: rgba(255, 255, 255, 0.05);
+            font-weight: 600;
+        }
+        tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .positive { color: #4ade80; }
+        .negative { color: #f87171; }
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        .badge-high { background: #4ade80; color: #000; }
+        .badge-medium { background: #fbbf24; color: #000; }
+        .badge-low { background: #60a5fa; color: #000; }
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #4ade80;
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+        }
+        .refresh-btn:hover {
+            transform: scale(1.05);
+        }
+        .clv-breakdowns {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        .clv-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .clv-table th,
+        .clv-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 0.9em;
+        }
+        .clv-table th {
+            text-transform: uppercase;
+            font-size: 0.75em;
+            letter-spacing: 0.08em;
+            opacity: 0.7;
+        }
+        .clv-list {
+            list-style: none;
+            line-height: 1.6;
+            font-size: 0.95em;
+            padding-left: 0;
+        }
+        .clv-list li {
+            margin-bottom: 6px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏆 NeoLight Sports Betting Dashboard</h1>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Bankroll</h3>
+                <div class="value" id="bankroll">$1,000.00</div>
+                <div class="change positive" id="bankroll-change">+0.0%</div>
+            </div>
+            <div class="stat-card">
+                <h3>Active Predictions</h3>
+                <div class="value" id="active-preds">0</div>
+                <div class="change">Today</div>
+            </div>
+            <div class="stat-card">
+                <h3>Win Rate</h3>
+                <div class="value" id="win-rate">--</div>
+                <div class="change" id="total-bets">0 bets</div>
+            </div>
+            <div class="stat-card">
+                <h3>ROI</h3>
+                <div class="value" id="roi">--</div>
+                <div class="change">All time</div>
+            </div>
+            <div class="stat-card">
+                <h3>Arbitrage Opps</h3>
+                <div class="value" id="arb-opps">0</div>
+                <div class="change">Risk-free profit</div>
+            </div>
+            <div class="stat-card">
+                <h3>Avg Edge</h3>
+                <div class="value" id="avg-edge">--</div>
+                <div class="change">Per prediction</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🎯 Today's Predictions</h2>
+            <table id="predictions-table">
+                <thead>
+                    <tr>
+                        <th>Sport</th>
+                        <th>Game</th>
+                        <th>Recommended</th>
+                        <th>Probability</th>
+                        <th>Edge</th>
+                        <th>Confidence</th>
+                        <th>Stake</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody id="predictions-tbody">
+                    <tr>
+                        <td colspan="8" style="text-align: center; opacity: 0.5;">Loading predictions...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>💰 Arbitrage Opportunities</h2>
+            <table id="arbitrage-table">
+                <thead>
+                    <tr>
+                        <th>Sport</th>
+                        <th>Event</th>
+                        <th>Profit %</th>
+                        <th>Total Stake</th>
+                        <th>Guaranteed Profit</th>
+                        <th>Books</th>
+                    </tr>
+                </thead>
+                <tbody id="arbitrage-tbody">
+                    <tr>
+                        <td colspan="6" style="text-align: center; opacity: 0.5;">No arbitrage opportunities found</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>📈 CLV & Steam Analytics</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Tracked Trades</h3>
+                    <div class="value" id="clv-total">0</div>
+                    <div class="change">All-time</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Avg CLV</h3>
+                    <div class="value" id="clv-avg">--</div>
+                    <div class="change">Closing line edge</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Positive CLV Rate</h3>
+                    <div class="value" id="clv-positive">--</div>
+                    <div class="change">Portion of trades beating close</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Steam Signals</h3>
+                    <div class="value" id="clv-steam-toward">0</div>
+                    <div class="change" id="clv-steam-against">Against: 0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Max Drawdown</h3>
+                    <div class="value" id="clv-drawdown">--</div>
+                    <div class="change">All trades</div>
+                </div>
+            </div>
+            <div id="clv-histogram" style="height:400px;"></div>
+            <div id="clv-scatter" style="height:400px; margin-top:20px;"></div>
+            <div id="steam-chart" style="height:350px; margin-top:20px;"></div>
+            <div class="clv-breakdowns">
+                <div class="stat-card">
+                    <h3>Sport Breakdown</h3>
+                    <table class="clv-table" id="clv-sport-table">
+                        <thead>
+                            <tr>
+                                <th>Sport</th>
+                                <th>Trades</th>
+                                <th>Avg CLV</th>
+                                <th>Positive</th>
+                                <th>Avg ROI</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="5" style="opacity:0.6;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="stat-card">
+                    <h3>League Breakdown</h3>
+                    <table class="clv-table" id="clv-league-table">
+                        <thead>
+                            <tr>
+                                <th>League</th>
+                                <th>Trades</th>
+                                <th>Avg CLV</th>
+                                <th>Positive</th>
+                                <th>Avg ROI</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="5" style="opacity:0.6;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="stat-card">
+                    <h3>Regime Breakdown</h3>
+                    <table class="clv-table" id="clv-regime-table">
+                        <thead>
+                            <tr>
+                                <th>Regime</th>
+                                <th>Trades</th>
+                                <th>Avg CLV</th>
+                                <th>Positive</th>
+                                <th>Avg ROI</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="5" style="opacity:0.6;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="clv-breakdowns">
+                <div class="stat-card">
+                    <h3>Weekly Leaders</h3>
+                    <ul id="weekly-leaders" class="clv-list"></ul>
+                </div>
+                <div class="stat-card">
+                    <h3>Monthly Leaders</h3>
+                    <ul id="monthly-leaders" class="clv-list"></ul>
+                </div>
+                <div class="stat-card">
+                    <h3>Steam Alerts</h3>
+                    <ul id="clv-flags" class="clv-list"></ul>
+                </div>
+            </div>
+            <div class="clv-breakdowns">
+                <div class="stat-card">
+                    <h3>Postgame Reviews</h3>
+                    <ul id="clv-reviews" class="clv-list"></ul>
+                </div>
+                <div class="stat-card">
+                    <h3>Learning Insights</h3>
+                    <ul id="clv-insights" class="clv-list"></ul>
+                </div>
+            </div>
+            <div style="margin-top:30px;">
+                <h3>Portfolio & Risk Analytics</h3>
+                <div id="portfolio-curve" style="height:400px; margin-top:10px;"></div>
+                <div class="clv-breakdowns" style="margin-top:20px;">
+                    <div class="stat-card">
+                        <h3>Scenario Metrics</h3>
+                        <table class="clv-table" id="portfolio-metrics-table">
+                            <thead>
+                                <tr>
+                                    <th>Scenario</th>
+                                    <th>Trades</th>
+                                    <th>Final P&L</th>
+                                    <th>Max DD</th>
+                                    <th>CVaR 95</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="5" style="opacity:0.6;">No scenarios</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Risk Notes</h3>
+                        <ul id="portfolio-risk-list" class="clv-list"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📊 Bankroll Chart</h2>
+            <div id="bankroll-chart"></div>
+        </div>
+
+        <div class="section">
+            <h2>🏅 Top Performing Sports</h2>
+            <div id="sports-performance-chart"></div>
+        </div>
+    </div>
+
+    <button class="refresh-btn" onclick="loadData()">🔄 Refresh</button>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        async function loadData() {
+            try {
+                // Load predictions
+                const predictions = await fetch('/api/sports/predictions').then(r => r.json()).catch(() => ({ predictions: [] }));
+                renderPredictions(predictions);
+ 
+                 // Load arbitrage
+                 const arbitrage = await fetch('/api/sports/arbitrage').then(r => r.json()).catch(() => []);
+                 renderArbitrage(arbitrage);
+ 
+                 // Load bankroll
+                 const bankroll = await fetch('/api/sports/bankroll').then(r => r.json()).catch(() => ({ bankroll: 1000, initial_bankroll: 1000 }));
+                 renderBankroll(bankroll);
+ 
+                 // Load betting history
+                 const history = await fetch('/api/sports/history').then(r => r.json()).catch(() => []);
+                 renderCharts(history);
+
+                // Load CLV analytics
+                const clvSummary = await fetch('/api/sports/clv/summary').then(r => r.json()).catch(() => null);
+                const clvTradesResponse = await fetch('/api/sports/clv/trades?limit=500').then(r => r.json()).catch(() => ({ trades: [] }));
+                renderClvAnalytics(clvSummary, (clvTradesResponse && clvTradesResponse.trades) || []);
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+
+        function renderPredictions(data) {
+            const tbody = document.getElementById('predictions-tbody');
+            const allPredictions = [];
+            
+            for (const [sport, sportData] of Object.entries(data)) {
+                if (sport === 'last_update' || sport === 'timestamp') continue;
+                const preds = sportData.predictions || [];
+                allPredictions.push(...preds.map(p => ({ ...p, sport })));
+            }
+
+            document.getElementById('active-preds').textContent = allPredictions.length;
+            
+            if (allPredictions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; opacity: 0.5;">No predictions available</td></tr>';
+                return;
+            }
+
+            const avgEdge = allPredictions.reduce((sum, p) => sum + (p.edge || 0), 0) / allPredictions.length;
+            document.getElementById('avg-edge').textContent = (avgEdge * 100).toFixed(2) + '%';
+
+            tbody.innerHTML = allPredictions.map(pred => {
+                const confidenceClass = pred.confidence > 0.7 ? 'badge-high' : pred.confidence > 0.6 ? 'badge-medium' : 'badge-low';
+                const edgeClass = pred.edge > 0 ? 'positive' : 'negative';
+                const stake = (1000 * 0.02 * (pred.edge / 0.02)).toFixed(2); // Simple Kelly
+                
+                return `
+                    <tr>
+                        <td>${pred.sport.toUpperCase()}</td>
+                        <td>${pred.away_team} @ ${pred.home_team}</td>
+                        <td><strong>${pred.recommended_side}</strong></td>
+                        <td>${(pred.home_win_probability * 100).toFixed(1)}% / ${(pred.away_win_probability * 100).toFixed(1)}%</td>
+                        <td class="${edgeClass}">${(pred.edge * 100).toFixed(2)}%</td>
+                        <td><span class="badge ${confidenceClass}">${(pred.confidence * 100).toFixed(0)}%</span></td>
+                        <td>$${stake}</td>
+                        <td>${new Date(pred.scheduled).toLocaleString()}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderArbitrage(data) {
+            const tbody = document.getElementById('arbitrage-tbody');
+            document.getElementById('arb-opps').textContent = data.length;
+            
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; opacity: 0.5;">No arbitrage opportunities found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(opp => {
+                const stakes = opp.calculated_stakes || [];
+                const totalStake = stakes.reduce((sum, s) => sum + s.stake, 0);
+                const profit = stakes[0]?.profit || 0;
+                const books = (opp.outcomes || []).map(o => o.bookmaker).join(', ');
+
+                return `
+                    <tr>
+                        <td>${opp.sport.toUpperCase()}</td>
+                        <td>${opp.event}</td>
+                        <td class="positive">${(opp.profit_percentage * 100).toFixed(2)}%</td>
+                        <td>$${totalStake.toFixed(2)}</td>
+                        <td class="positive">$${profit.toFixed(2)}</td>
+                        <td>${books}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderBankroll(data) {
+             const current = data.bankroll || 1000;
+             const initial = data.initial_bankroll || 1000;
+             const change = ((current - initial) / initial * 100).toFixed(2);
+             
+             document.getElementById('bankroll').textContent = '$' + current.toFixed(2);
+             document.getElementById('bankroll-change').textContent = (change >= 0 ? '+' : '') + change + '%';
+             document.getElementById('bankroll-change').className = 'change ' + (change >= 0 ? 'positive' : 'negative');
+         }
+ 
+         function renderCharts(history) {
+             // Bankroll chart
+             const dates = history.map(h => h.date);
+             const bankrolls = history.map(h => h.bankroll);
+ 
+             Plotly.newPlot('bankroll-chart', [{
+                 x: dates,
+                 y: bankrolls,
+                 type: 'scatter',
+                 mode: 'lines+markers',
+                 line: { color: '#4ade80', width: 3 },
+                 marker: { color: '#4ade80', size: 6 }
+             }], {
+                 paper_bgcolor: 'rgba(0,0,0,0)',
+                 plot_bgcolor: 'rgba(0,0,0,0)',
+                 font: { color: '#fff' },
+                 xaxis: { gridcolor: 'rgba(255,255,255,0.1)' },
+                 yaxis: { gridcolor: 'rgba(255,255,255,0.1)' },
+                 margin: { t: 20 }
+             }, { responsive: true });
+ 
+             // Sports performance chart (placeholder)
+             const sports = ['NFL', 'NBA', 'MLB'];
+             const roi = [5.2, 3.8, 7.1];
+ 
+             Plotly.newPlot('sports-performance-chart', [{
+                 x: sports,
+                 y: roi,
+                 type: 'bar',
+                 marker: { color: ['#4ade80', '#60a5fa', '#fbbf24'] }
+             }], {
+                 paper_bgcolor: 'rgba(0,0,0,0)',
+                 plot_bgcolor: 'rgba(0,0,0,0)',
+                 font: { color: '#fff' },
+                 yaxis: { title: 'ROI %', gridcolor: 'rgba(255,255,255,0.1)' },
+                 xaxis: { gridcolor: 'rgba(255,255,255,0.1)' },
+                 margin: { t: 20 }
+             }, { responsive: true });
+         }
+
+        function formatPercent(value, decimals = 2) {
+            if (value === null || value === undefined) {
+                return '--';
+            }
+            return (value * 100).toFixed(decimals) + '%';
+        }
+ 
+         function formatNumber(value, decimals = 2) {
+             if (value === null || value === undefined) {
+                 return '--';
+             }
+             return Number(value).toFixed(decimals);
+         }
+
+        function formatCurrency(value, decimals = 2) {
+            if (value === null || value === undefined) {
+                return '--';
+            }
+            return '$' + Number(value).toFixed(decimals);
+        }
+ 
+         function populateClvTable(collection, elementId, labelKey) {
+             const table = document.getElementById(elementId);
+             if (!table) return;
+             const tbody = table.querySelector('tbody');
+             if (!Array.isArray(collection) || !collection.length) {
+                 tbody.innerHTML = `<tr><td colspan="5" style="opacity:0.6;">No data</td></tr>`;
+                 return;
+             }
+             tbody.innerHTML = collection
+                 .map(entry => {
+                     const label = entry[labelKey] || 'Unknown';
+                     const count = entry.count ?? 0;
+                     const avgClv = formatPercent(entry.avg_clv); 
+                     const positive = formatPercent(entry.positive_rate, 1);
+                     const avgRoi = formatPercent(entry.avg_roi);
+                     return `
+                         <tr>
+                             <td>${label}</td>
+                             <td>${count}</td>
+                             <td>${avgClv}</td>
+                             <td>${positive}</td>
+                             <td>${avgRoi}</td>
+                         </tr>
+                     `;
+                 })
+                 .join('');
+         }
+ 
+         function populateClvList(element, items, emptyMessage = 'No data') {
+             if (!element) return;
+             if (!Array.isArray(items) || !items.length) {
+                 element.innerHTML = `<li>${emptyMessage}</li>`;
+                 return;
+             }
+             element.innerHTML = items.join('');
+         }
+
+        function renderPortfolioAnalytics(portfolio) {
+            const curveDiv = document.getElementById('portfolio-curve');
+            const metricsTable = document.getElementById('portfolio-metrics-table');
+            const riskList = document.getElementById('portfolio-risk-list');
+
+            if (!curveDiv || !metricsTable || !riskList) {
+                return;
+            }
+
+            const curves = (portfolio && portfolio.curves) || [];
+            if (!curves.length) {
+                Plotly.purge(curveDiv.id);
+                curveDiv.innerHTML = '<div style="text-align:center; opacity:0.6; padding:40px;">No portfolio samples yet.</div>';
+            } else {
+                const traces = curves.map(curve => ({
+                    x: (curve.points || []).map(point => point.time),
+                    y: (curve.points || []).map(point => point.bankroll),
+                    mode: 'lines+markers',
+                    name: curve.label,
+                }));
+                curveDiv.innerHTML = '';
+                Plotly.react(curveDiv.id, traces, {
+                    title: 'Scenario Bankroll Curves',
+                    xaxis: { title: 'Time', gridcolor: 'rgba(255,255,255,0.1)' },
+                    yaxis: { title: 'Bankroll ($)', gridcolor: 'rgba(255,255,255,0.1)' },
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: '#fff' },
+                    margin: { t: 40 },
+                }, { responsive: true });
+            }
+
+            const scenarios = (portfolio && portfolio.scenarios) || [];
+            const tbody = metricsTable.querySelector('tbody');
+            if (!scenarios.length) {
+                tbody.innerHTML = '<tr><td colspan="5" style="opacity:0.6;">No scenarios</td></tr>';
+            } else {
+                tbody.innerHTML = scenarios
+                    .map(s => `
+                        <tr>
+                            <td>${s.label}</td>
+                            <td>${s.trade_count ?? 0}</td>
+                            <td>${formatCurrency(s.final_pnl)}</td>
+                            <td>${formatCurrency(s.max_drawdown)}</td>
+                            <td>${formatCurrency(s.cvar_95)}</td>
+                        </tr>
+                    `)
+                    .join('');
+            }
+
+            if (!scenarios.length) {
+                populateClvList(riskList, [], 'No risk notes');
+            } else {
+                const largestDrawdown = scenarios.reduce((worst, scenario) => {
+                    const drawdown = scenario.max_drawdown ?? 0;
+                    if (!worst || drawdown > (worst.max_drawdown ?? 0)) {
+                        return scenario;
+                    }
+                    return worst;
+                }, null);
+
+                const worstCvar = scenarios.reduce((worst, scenario) => {
+                    const cvar = scenario.cvar_95 ?? 0;
+                    if (worst === null || (cvar < worst.value)) {
+                        return { scenario, value: cvar };
+                    }
+                    return worst;
+                }, null);
+
+                const riskItems = [];
+                if (largestDrawdown && (largestDrawdown.max_drawdown ?? 0) > 0) {
+                    riskItems.push(
+                        `<li><strong>${largestDrawdown.label}</strong> max drawdown ${formatCurrency(largestDrawdown.max_drawdown)}</li>`
+                    );
+                }
+                if (worstCvar && worstCvar.scenario) {
+                    riskItems.push(
+                        `<li><strong>${worstCvar.scenario.label}</strong> CVaR 95 ${formatCurrency(worstCvar.value)}</li>`
+                    );
+                }
+                populateClvList(riskList, riskItems, 'No risk notes');
+            }
+        }
+ 
+        function renderClvAnalytics(summary, trades) {
+            const totalEl = document.getElementById('clv-total');
+            const avgEl = document.getElementById('clv-avg');
+            const positiveEl = document.getElementById('clv-positive');
+            const steamTowardEl = document.getElementById('clv-steam-toward');
+            const steamAgainstEl = document.getElementById('clv-steam-against');
+            const weeklyEl = document.getElementById('weekly-leaders');
+            const monthlyEl = document.getElementById('monthly-leaders');
+            const flagsEl = document.getElementById('clv-flags');
+            const reviewsEl = document.getElementById('clv-reviews');
+            const insightsEl = document.getElementById('clv-insights');
+            const drawdownEl = document.getElementById('clv-drawdown');
+
+            if (!summary) {
+                totalEl.textContent = '0';
+                avgEl.textContent = '--';
+                positiveEl.textContent = '--';
+                steamTowardEl.textContent = '0';
+                steamAgainstEl.textContent = 'Against: 0';
+                if (drawdownEl) {
+                    drawdownEl.textContent = '--';
+                }
+                populateClvList(weeklyEl, [], 'No data');
+                populateClvList(monthlyEl, [], 'No data');
+                populateClvList(flagsEl, [], 'No alerts');
+                populateClvList(reviewsEl, [], 'No settled trades yet');
+                populateClvList(insightsEl, [], 'No insights yet');
+                document.getElementById('clv-histogram').innerHTML = '<div style="text-align:center; opacity:0.6; padding:40px;">CLV data not available yet.</div>';
+                document.getElementById('clv-scatter').innerHTML = '';
+                document.getElementById('steam-chart').innerHTML = '';
+                renderPortfolioAnalytics(null);
+                populateClvTable([], 'clv-sport-table', 'sport');
+                populateClvTable([], 'clv-league-table', 'league');
+                populateClvTable([], 'clv-regime-table', 'regime');
+                return;
+            }
+
+            const totalTrades = summary.total_trades ?? trades.length;
+            totalEl.textContent = totalTrades;
+            avgEl.textContent = formatPercent(summary.average_clv);
+            positiveEl.textContent = formatPercent(summary.positive_rate, 1);
+
+            const steamSummary = summary.steam_summary || {};
+            const toward = steamSummary.toward_model ?? 0;
+            const against = steamSummary.against_model ?? 0;
+            steamTowardEl.textContent = toward;
+            steamAgainstEl.textContent = `Against: ${against}`;
+
+            const weeklyItems = (summary.weekly_leaders || []).map(
+                item => `<li>${item.period}: ${formatPercent(item.avg_clv)} (${item.samples} bets)</li>`
+            );
+            populateClvList(weeklyEl, weeklyItems, 'No data');
+
+            const monthlyItems = (summary.monthly_leaders || []).map(
+                item => `<li>${item.period}: ${formatPercent(item.avg_clv)} (${item.samples} bets)</li>`
+            );
+            populateClvList(monthlyEl, monthlyItems, 'No data');
+
+            const flags = summary.flags || {};
+            const flagItems = [];
+            if (flags.steam_against && flags.steam_against.length) {
+                flagItems.push(`<li style="color:#f87171;">Steam against model: ${flags.steam_against.length}</li>`);
+            }
+            if (flags.steam_toward && flags.steam_toward.length) {
+                flagItems.push(`<li style="color:#4ade80;">Steam toward model: ${flags.steam_toward.length}</li>`);
+            }
+            populateClvList(flagsEl, flagItems, 'No alerts');
+
+            const portfolio = summary.portfolio || {};
+            const allCurve = (portfolio.curves || []).find(curve => curve.label === 'All Trades') || (portfolio.curves || [])[0];
+            if (drawdownEl) {
+                drawdownEl.textContent = allCurve && (allCurve.max_drawdown || allCurve.max_drawdown === 0)
+                    ? formatCurrency(allCurve.max_drawdown)
+                    : '--';
+            }
+            renderPortfolioAnalytics(portfolio);
+
+            const reviews = (summary.postgame_reviews || []).map(review => {
+                const result = (review.result || 'pending').toUpperCase();
+                const resultClass = result === 'WIN' ? 'positive' : result === 'LOSS' ? 'negative' : '';
+                const clvText = formatPercent(review.clv);
+                const roiText = review.roi !== null && review.roi !== undefined ? formatPercent(review.roi) : '--';
+                const notes = review.notes ? `<br><span style="opacity:0.8;">${review.notes}</span>` : '';
+                return `<li><strong>${(review.sport || '').toUpperCase()} • ${review.league || 'Unknown'} • ${review.game_id || ''}</strong><br>
+                    Result: <span class="${resultClass}">${result}</span> | CLV ${clvText} | ROI ${roiText}${notes}</li>`;
+            });
+            populateClvList(reviewsEl, reviews, 'No settled trades yet');
+
+            const insights = (summary.learning_insights || []).map(insight => {
+                return `<li><strong>${(insight.regime || 'Unknown').toUpperCase()}</strong>: ${insight.action.replace('_', ' ')} — ${insight.reason}</li>`;
+            });
+            populateClvList(insightsEl, insights, 'No insights yet');
+
+            populateClvTable(summary.by_sport || [], 'clv-sport-table', 'sport');
+            populateClvTable(summary.by_league || [], 'clv-league-table', 'league');
+            populateClvTable(summary.by_regime || [], 'clv-regime-table', 'regime');
+
+            const clvValues = trades
+                .filter(t => typeof t.clv === 'number')
+                .map(t => t.clv * 100);
+            const histDiv = document.getElementById('clv-histogram');
+            if (!clvValues.length) {
+                Plotly.purge('clv-histogram');
+                histDiv.innerHTML = '<div style="text-align:center; opacity:0.6; padding:40px;">No CLV samples recorded.</div>';
+            } else {
+                histDiv.innerHTML = '';
+                Plotly.react('clv-histogram', [{
+                    x: clvValues,
+                    type: 'histogram',
+                    histnorm: 'probability',
+                    marker: { color: '#60a5fa' }
+                }], {
+                    title: 'CLV Distribution (%)',
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: '#fff' },
+                    xaxis: { gridcolor: 'rgba(255,255,255,0.1)' },
+                    yaxis: { gridcolor: 'rgba(255,255,255,0.1)', tickformat: '.0%' },
+                    margin: { t: 40 }
+                }, { responsive: true });
+            }
+
+            const scatterPoints = trades
+                .filter(t => typeof t.clv === 'number' && typeof t.stake === 'number' && t.stake !== 0 && typeof t.pnl === 'number')
+                .map(t => ({
+                    clv: t.clv * 100,
+                    roi: (t.pnl / t.stake) * 100,
+                    sport: (t.sport || 'unknown').toUpperCase()
+                }));
+            const scatterDiv = document.getElementById('clv-scatter');
+            if (!scatterPoints.length) {
+                Plotly.purge('clv-scatter');
+                scatterDiv.innerHTML = '<div style="text-align:center; opacity:0.6; padding:40px;">ROI vs CLV data not available.</div>';
+            } else {
+                scatterDiv.innerHTML = '';
+                Plotly.react('clv-scatter', [{
+                    x: scatterPoints.map(p => p.clv),
+                    y: scatterPoints.map(p => p.roi),
+                    text: scatterPoints.map(p => p.sport),
+                    mode: 'markers',
+                    type: 'scatter',
+                    marker: {
+                        size: 10,
+                        color: scatterPoints.map(p => p.clv >= 0 ? '#4ade80' : '#f87171'),
+                        opacity: 0.8
+                    }
+                }], {
+                    title: 'ROI vs CLV',
+                    xaxis: { title: 'CLV (%)', gridcolor: 'rgba(255,255,255,0.1)' },
+                    yaxis: { title: 'ROI (%)', gridcolor: 'rgba(255,255,255,0.1)' },
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: '#fff' },
+                    margin: { t: 40 }
+                }, { responsive: true });
+            }
+
+            const steamEntries = Object.entries(steamSummary).map(([key, value]) => ({ direction: key, count: value }));
+            const steamDiv = document.getElementById('steam-chart');
+            if (!steamEntries.length) {
+                Plotly.purge('steam-chart');
+                steamDiv.innerHTML = '<div style="text-align:center; opacity:0.6; padding:40px;">No steam signals yet.</div>';
+            } else {
+                steamDiv.innerHTML = '';
+                Plotly.react('steam-chart', [{
+                    x: steamEntries.map(e => e.direction.replace('_', ' ')),
+                    y: steamEntries.map(e => e.count),
+                    type: 'bar',
+                    marker: { color: ['#4ade80', '#f87171', '#60a5fa'] }
+                }], {
+                    title: 'Steam Direction Counts',
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: '#fff' },
+                    xaxis: { gridcolor: 'rgba(255,255,255,0.1)' },
+                    yaxis: { gridcolor: 'rgba(255,255,255,0.1)' },
+                    margin: { t: 40 }
+                }, { responsive: true });
+            }
+        }
+ 
+        // Load data on page load and every 60 seconds
+        loadData();
+        setInterval(loadData, 60000);
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,661 @@
+#!/usr/bin/env python3
+"""
+NeoLight — Smart Trader (World-Class Rewrite)
+---------------------------------------------
+Phase-safe, Guardian-aware, Atlas-informed, ledger-integrated trading loop.
+
+Features
+- Paper broker (default) with clean, swappable interface for live brokers.
+- Atlas Brain integration (runtime/atlas_learning.json) → risk scaling.
+- Equity-aware circuit breakers (daily loss cap, loss streak halt, cooldowns).
+- Adaptive spread + volatility filters; pyramiding on strength.
+- Ledger integration (backend/ledger_engine.py) — non-blocking subprocess hook.
+- Guardian-friendly logs (logs/trader.log + logs/trader_bridge.log).
+- Telegram alerts (optional) for critical events & large drawdowns.
+- Daily session reset; MAX_CONCURRENT enforcement; safe error backoff.
+
+This file is designed to be dropped into your current tree:
+  - traders/smart_trader.py             (this file)
+  - backend/ledger_engine.py            (already provided)
+  - runtime/atlas_learning.json         (Atlas risk + win_rate)
+  - logs/                               (auto-created)
+
+Swap to a live broker by implementing the IBroker interface below.
+"""
+
+import datetime as dt
+import json
+import os
+import random
+import signal
+import subprocess
+import sys
+import time
+import traceback
+from pathlib import Path
+from typing import Any, Optional
+
+# ────────────────────────────────────────────────────────────────────────────────
+# Paths & Globals
+# ────────────────────────────────────────────────────────────────────────────────
+ROOT = Path(__file__).resolve().parents[1]
+LOG_DIR = ROOT / "logs"
+STATE_DIR = ROOT / "trader"
+RUNTIME_DIR = ROOT / "runtime"
+BACKEND_DIR = ROOT / "backend"
+
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+STATE_DIR.mkdir(parents=True, exist_ok=True)
+RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+
+LOG_FILE = LOG_DIR / "trader.log"
+BRIDGE_LOG_FILE = LOG_DIR / "trader_bridge.log"  # Guardian follows this
+STATE_FILE = STATE_DIR / "state.json"
+ATLAS_FILE = RUNTIME_DIR / "atlas_learning.json"
+
+# Optional Telegram alerts
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+ALERT_DRAWDOWN_PCT = float(os.getenv("NEOLIGHT_ALERT_DRAWDOWN_PCT", "10.0"))
+
+# Session config
+PAPER = os.getenv("NEOLIGHT_PAPER", "true").lower() != "false"
+DEEP_RESEARCH = (
+    os.getenv("NEOLIGHT_DEEP_RESEARCH", "false").lower() == "true"
+)  # ok to run faster/no windows if true
+SESSION_TZ = os.getenv("NEOLIGHT_TZ", "local")  # reserved hook; local hours used by default
+
+# ────────────────────────────────────────────────────────────────────────────────
+# Strategy / Risk Parameters (sensible production defaults)
+# ────────────────────────────────────────────────────────────────────────────────
+# Symbols: keep CCXT-style pairs; paper broker doesn’t fetch from network.
+SYMBOLS = os.getenv("NEOLIGHT_SYMBOLS", "BTC/USD,ETH/USD,USDT/USD").split(",")
+BASE_CCY = "USD"
+
+# Risk knobs (scaled by Atlas)
+BASE_MAX_PCT_RISK = float(os.getenv("NEOLIGHT_BASE_MAX_PCT_RISK", "0.010"))  # 1.0% pv per entry
+MAX_CONCURRENT = int(os.getenv("NEOLIGHT_MAX_CONCURRENT", "2"))  # max simultaneous symbols
+MAX_PYRAMIDS = int(os.getenv("NEOLIGHT_MAX_PYRAMIDS", "2"))
+PYRAMID_GAIN_BPS = float(os.getenv("NEOLIGHT_PYRAMID_GAIN_BPS", "25"))  # +0.25% since last add
+
+DAILY_LOSS_LIMIT_PCT = float(os.getenv("NEOLIGHT_DAILY_LOSS_LIMIT_PCT", "1.2"))
+MAX_LOSS_STREAK = int(os.getenv("NEOLIGHT_MAX_LOSS_STREAK", "4"))
+
+COOLDOWN_WIN_SEC = int(os.getenv("NEOLIGHT_COOLDOWN_WIN_SEC", "5"))
+COOLDOWN_LOSS_SEC = int(os.getenv("NEOLIGHT_COOLDOWN_LOSS_SEC", "180"))
+COOLDOWN_CB_SEC = int(os.getenv("NEOLIGHT_COOLDOWN_CB_SEC", "1800"))
+
+# Signals / Exits
+SMA_FAST = int(os.getenv("NEOLIGHT_SMA_FAST", "20"))
+SMA_SLOW = int(os.getenv("NEOLIGHT_SMA_SLOW", "50"))
+RSI_LEN = int(os.getenv("NEOLIGHT_RSI_LEN", "14"))
+RSI_BUY = float(os.getenv("NEOLIGHT_RSI_BUY", "38"))  # conservative
+RSI_SELL = float(os.getenv("NEOLIGHT_RSI_SELL", "62"))  # reserved (short logic placeholder)
+
+TRAIL_BPS = float(os.getenv("NEOLIGHT_TRAIL_BPS", "30"))  # 0.30%
+HARD_STOP_BPS = float(os.getenv("NEOLIGHT_HARD_STOP_BPS", "55"))  # 0.55%
+TAKE_PROFIT_BPS = float(os.getenv("NEOLIGHT_TAKE_PROFIT_BPS", "85"))  # 0.85%
+
+# Market hygiene
+BASE_SPREAD_BPS = float(os.getenv("NEOLIGHT_BASE_SPREAD_BPS", "10.0"))
+SPREAD_CAP_BPS = float(os.getenv("NEOLIGHT_SPREAD_CAP_BPS", "45.0"))
+VOL_TOO_HIGH = float(os.getenv("NEOLIGHT_VOL_TOO_HIGH", "0.012"))  # 1.2% avg bar change → skip
+
+# Trading window (local hours, 24h). Disabled if DEEP_RESEARCH=true
+TRADE_WINDOW = tuple(int(x) for x in os.getenv("NEOLIGHT_TRADE_WINDOW", "6,20").split(","))
+
+# Loop pacing
+LOOP_SLEEP_SEC = float(os.getenv("NEOLIGHT_LOOP_SLEEP_SEC", "0.9"))
+ERROR_BACKOFF_SEC = float(os.getenv("NEOLIGHT_ERROR_BACKOFF_SEC", "2.0"))
+
+# Ledger hook
+LEDGER_ENGINE = BACKEND_DIR / "ledger_engine.py"
+
+
+# ────────────────────────────────────────────────────────────────────────────────
+# Utilities
+# ────────────────────────────────────────────────────────────────────────────────
+def _now_iso():
+    return dt.datetime.now().isoformat(timespec="seconds")
+
+
+def log(msg: str):
+    """Logs to trader.log and trader_bridge.log (Guardian watches bridge)."""
+    line = f"[{_now_iso()}] {msg}\n"
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with LOG_FILE.open("a", encoding="utf-8") as f:
+        f.write(line)
+    with BRIDGE_LOG_FILE.open("a", encoding="utf-8") as f:
+        f.write(line)
+    print(msg, flush=True)
+
+
+def send_telegram(text: str):
+    if not (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID):
+        return
+    try:
+        import urllib.parse
+        import urllib.request
+
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        data = urllib.parse.urlencode({"chat_id": TELEGRAM_CHAT_ID, "text": text}).encode()
+        urllib.request.urlopen(url, data=data, timeout=6)
+    except Exception:
+        pass
+
+
+def write_state(state: dict[str, Any]):
+    STATE_FILE.write_text(json.dumps(state, indent=2))
+
+
+def read_state() -> dict[str, Any]:
+    if STATE_FILE.exists():
+        try:
+            return json.loads(STATE_FILE.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def within_window() -> bool:
+    if DEEP_RESEARCH:
+        return True
+    s, e = TRADE_WINDOW
+    hour = dt.datetime.now().hour
+    return s <= hour < e
+
+
+def load_atlas() -> tuple[float, float]:
+    """
+    Returns (win_rate, risk_factor).
+    File is expected to be JSON with keys win_rate and risk_factor.
+    """
+    try:
+        if ATLAS_FILE.exists():
+            d = json.loads(ATLAS_FILE.read_text())
+            return float(d.get("win_rate", 0.5)), float(d.get("risk_factor", 1.0))
+    except Exception as e:
+        log(f"⚠️ Atlas read failed: {e}")
+    return 0.5, 1.0
+
+
+def risk_scaled_pct(base_max_pct: float, risk_factor: float) -> float:
+    # Clamp risk_factor to [0.5, 2.0] to keep sane bounds
+    rf = max(0.5, min(2.0, risk_factor))
+    return base_max_pct * rf
+
+
+def spread_bps(q: dict[str, float]) -> float:
+    mid = (q["bid"] + q["ask"]) / 2.0
+    return (q["ask"] - q["bid"]) / max(1e-9, mid) * 10000.0
+
+
+def sma(series: list[float], n: int) -> Optional[float]:
+    if len(series) < n:
+        return None
+    a = series[-n:]
+    return sum(a) / float(n)
+
+
+def rsi(prices: list[float], n: int = 14) -> Optional[float]:
+    if len(prices) < n + 1:
+        return None
+    gains = 0.0
+    losses = 0.0
+    for i in range(-n, 0):
+        d = prices[i] - prices[i - 1]
+        if d > 0:
+            gains += d
+        else:
+            losses -= d
+    if losses <= 0:
+        return 100.0
+    rs = gains / max(1e-9, losses)
+    return 100.0 - (100.0 / (1.0 + rs))
+
+
+def clamp(v: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, v))
+
+
+# ────────────────────────────────────────────────────────────────────────────────
+# Broker Interfaces
+# ────────────────────────────────────────────────────────────────────────────────
+class IBroker:
+    def fetch_quote(self, sym: str) -> dict[str, float]:
+        raise NotImplementedError
+
+    def fetch_portfolio_value(self) -> float:
+        raise NotImplementedError
+
+    def submit_order(self, sym: str, side: str, qty: float, price: float) -> dict[str, float]:
+        raise NotImplementedError
+
+    @property
+    def cash(self) -> float:
+        raise NotImplementedError
+
+    @property
+    def positions(self) -> dict[str, dict[str, float]]:
+        raise NotImplementedError
+
+
+class PaperBroker(IBroker):
+    """
+    Deterministic-ish paper broker with ~10 bps spread & minimal fees.
+    Not price-anchored to real ticks; fine for loop validation + Deep Research.
+    """
+
+    def __init__(self, starting_equity: float = 90000.0):
+        self._cash = starting_equity
+        self._equity = starting_equity
+        self._positions: dict[str, dict[str, float]] = {}
+
+    @property
+    def cash(self) -> float:
+        return self._cash
+
+    @property
+    def positions(self) -> dict[str, dict[str, float]]:
+        return self._positions
+
+    def fetch_quote(self, sym: str) -> dict[str, float]:
+        # Simulate a positive drift to keep the loop active
+        base = 1000.0 + (time.time() % 600.0) * 0.02  # slow drift
+        jitter = random.random() * 4.0
+        mid = base + jitter
+        return {"bid": mid * 0.9995, "ask": mid * 1.0005}
+
+    def fetch_portfolio_value(self) -> float:
+        # Simplified: equity only updates on realized PnL for paper mode
+        return self._equity
+
+    def submit_order(self, sym: str, side: str, qty: float, price: float) -> dict[str, float]:
+        side = side.lower()
+        if qty <= 0:
+            raise RuntimeError("qty must be > 0")
+        notional = qty * price
+        fee = max(0.0, 0.0002 * notional)
+
+        if side == "buy":
+            if notional + fee > self._cash:
+                raise RuntimeError("insufficient balance")
+            self._cash -= notional + fee
+            pos = self._positions.get(sym, {"qty": 0.0, "avg": 0.0})
+            new_qty = pos["qty"] + qty
+            pos["avg"] = (pos["avg"] * pos["qty"] + price * qty) / max(1e-9, new_qty)
+            pos["qty"] = new_qty
+            self._positions[sym] = pos
+        elif side == "sell":
+            pos = self._positions.get(sym, {"qty": 0.0, "avg": 0.0})
+            if qty > pos["qty"] + 1e-12:
+                raise RuntimeError("sell qty > pos qty")
+            pos["qty"] -= qty
+            pnl = (price - pos["avg"]) * qty
+            self._cash += qty * price - fee
+            if pos["qty"] <= 1e-12:
+                # Realize PnL upon flat
+                self._equity += pnl
+                self._positions.pop(sym, None)
+            else:
+                self._positions[sym] = pos
+        else:
+            raise RuntimeError("side must be buy or sell")
+        return {"filled_qty": qty, "filled_price": price, "fee": fee}
+
+
+# Placeholder for live broker (Alpaca/CCXT) wiring
+def make_broker() -> IBroker:
+    # If you want to switch to live, replace with Alpaca/CCXT constructor here.
+    return PaperBroker()
+
+
+# ────────────────────────────────────────────────────────────────────────────────
+# Strategy Helpers
+# ────────────────────────────────────────────────────────────────────────────────
+class Ring:
+    def __init__(self, n: int):
+        self.n = n
+        self.a: list[float] = []
+
+    def add(self, x: float):
+        self.a.append(x)
+
+    def arr(self) -> list[float]:
+        return self.a[-self.n :] if len(self.a) > self.n else list(self.a)
+
+
+def adapt_exits(entry: float, best: float, side: str, vol_bp: float) -> tuple[float, float, float]:
+    """
+    Volatility-aware HS/TS/TP. Scales exits around a baseline using recent vol in bps.
+    """
+    vol_scale = clamp(1.0 + (vol_bp - 10.0) / 60.0, 0.7, 1.4)  # 10 bps baseline
+    t_bps = TRAIL_BPS * vol_scale
+    hs_bps = HARD_STOP_BPS * vol_scale
+    tp_bps = TAKE_PROFIT_BPS * vol_scale
+
+    if side == "long":
+        hs = entry * (1 - hs_bps / 10000.0)
+        tp = entry * (1 + tp_bps / 10000.0)
+        ts = best * (1 - t_bps / 10000.0)
+        return hs, ts, tp
+    else:
+        # Short logic reserved
+        hs = entry * (1 + hs_bps / 10000.0)
+        tp = entry * (1 - tp_bps / 10000.0)
+        ts = best * (1 + t_bps / 10000.0)
+        return hs, ts, tp
+
+
+def size_for_risk(pv: float, price: float, risk_pct: float) -> float:
+    notional = pv * max(0.0, risk_pct)
+    return max(0.0, notional / max(1e-9, price))
+
+
+def circuit_breaker(state: dict[str, Any]) -> Optional[str]:
+    if state["daily"]["pnl_pct"] <= -DAILY_LOSS_LIMIT_PCT:
+        return "DAILY_PNL"
+    if state["streak"]["losses"] >= MAX_LOSS_STREAK:
+        return "LOSS_STREAK"
+    return None
+
+
+def record_fill_async(
+    symbol: str, side: str, qty: float, price: float, fee: float = 0.0, note: str = ""
+):
+    """
+    Non-blocking ledger write. Safe if ledger_engine is missing (no-op).
+    """
+    if not LEDGER_ENGINE.exists():
+        return
+    try:
+        subprocess.Popen(
+            [
+                sys.executable,
+                str(LEDGER_ENGINE),
+                "--record-fill",
+                "--symbol",
+                symbol,
+                "--side",
+                side,
+                "--qty",
+                str(qty),
+                "--price",
+                str(price),
+                "--fee",
+                str(fee),
+                "--note",
+                note,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
+
+# ────────────────────────────────────────────────────────────────────────────────
+# Main Loop
+# ────────────────────────────────────────────────────────────────────────────────
+def main():
+    broker = make_broker()
+    prices = {s: Ring(300) for s in SYMBOLS}
+    pyramids = {s: 0 for s in SYMBOLS}
+
+    today = dt.date.today().isoformat()
+    pv0 = broker.fetch_portfolio_value()
+
+    state: dict[str, Any] = read_state() or {
+        "balances": {BASE_CCY: broker.cash},
+        "positions": {},  # sym -> metadata {entry,best,last_add_px,side}
+        "pending": {},
+        "daily": {"date": today, "start_equity": pv0, "pnl_pct": 0.0},
+        "streak": {"wins": 0, "losses": 0, "last_result": None},
+        "cooldown_until": 0.0,
+        "alerts": {"drawdown_sent": False},
+    }
+
+    log(f"🟣 SmartTrader starting (paper={PAPER}, deep_research={DEEP_RESEARCH})")
+
+    stop_flag = {"stop": False}
+
+    def on_sigterm(sig, frame):
+        stop_flag["stop"] = True
+        log("🛑 Received shutdown signal. Exiting cleanly...")
+
+    signal.signal(signal.SIGINT, on_sigterm)
+    signal.signal(signal.SIGTERM, on_sigterm)
+
+    while not stop_flag["stop"]:
+        try:
+            # Daily reset block
+            if state["daily"]["date"] != dt.date.today().isoformat():
+                pv0 = broker.fetch_portfolio_value()
+                state["daily"] = {
+                    "date": dt.date.today().isoformat(),
+                    "start_equity": pv0,
+                    "pnl_pct": 0.0,
+                }
+                state["streak"] = {"wins": 0, "losses": 0, "last_result": None}
+                state["alerts"]["drawdown_sent"] = False
+                pyramids.update({s: 0 for s in SYMBOLS})
+                log("🔁 New trading day → reset daily stats & pyramids.")
+
+            # Trading window & cooldown
+            if not within_window():
+                time.sleep(2.0)
+                continue
+            if time.time() < float(state.get("cooldown_until", 0.0)):
+                time.sleep(1.0)
+                continue
+
+            # Portfolio & daily PnL
+            pv = broker.fetch_portfolio_value()
+            state["balances"][BASE_CCY] = broker.cash
+            day_pnl_pct = (
+                (pv - state["daily"]["start_equity"])
+                / max(1e-9, state["daily"]["start_equity"])
+                * 100.0
+            )
+            state["daily"]["pnl_pct"] = round(day_pnl_pct, 3)
+
+            # Drawdown alert (one-time per day)
+            if ALERT_DRAWDOWN_PCT > 0 and not state["alerts"]["drawdown_sent"]:
+                if day_pnl_pct <= -ALERT_DRAWDOWN_PCT:
+                    send_telegram(f"⚠️ NeoLight daily drawdown {day_pnl_pct:.2f}% reached.")
+                    state["alerts"]["drawdown_sent"] = True
+
+            # Circuit breaker
+            halted = circuit_breaker(state)
+            if halted:
+                log(f"⛔ Circuit breaker: {halted}. Cooldown {COOLDOWN_CB_SEC//60}m.")
+                state["cooldown_until"] = time.time() + COOLDOWN_CB_SEC
+                write_state(state)
+                time.sleep(3.0)
+                continue
+
+            # Atlas risk modulation
+            win_rate, risk_factor = load_atlas()
+            risk_pct = risk_scaled_pct(BASE_MAX_PCT_RISK, risk_factor)
+
+            # Enforce MAX_CONCURRENT: skip new entries if we’re at limit
+            open_syms = list(broker.positions.keys())
+            can_open_new = len(open_syms) < MAX_CONCURRENT
+
+            # Iterate symbols
+            for sym in SYMBOLS:
+                # Quotes & basic hygiene
+                q = broker.fetch_quote(sym)
+                s_bps = spread_bps(q)
+
+                # Spread filter (scaled by win_rate & risk_factor)
+                base_spread = BASE_SPREAD_BPS + win_rate * 10.0 + (risk_factor - 1.0) * 10.0
+                base_spread = clamp(base_spread, 6.0, SPREAD_CAP_BPS)
+                if s_bps > base_spread:
+                    log(f"⚠️ {sym} spread {s_bps:.2f}bps > {base_spread:.2f}bps → skip")
+                    continue
+
+                # Price history
+                mid = (q["bid"] + q["ask"]) / 2.0
+                prices[sym].add(mid)
+                p = prices[sym].arr()
+                need_hist = max(SMA_SLOW, RSI_LEN) + 2
+                if len(p) < need_hist:
+                    continue
+
+                # Volatility proxy (last ~30 steps)
+                diffs = [abs(p[i] - p[i - 1]) for i in range(-min(30, len(p) - 1), -1)]
+                vol = (sum(diffs) / max(1, len(diffs))) / max(1e-9, mid)
+                if vol > VOL_TOO_HIGH:
+                    log(f"🌪️ {sym} vol too high ({vol:.3%}) → skip")
+                    continue
+                vol_bp = vol * 10000.0
+
+                # Signal stack
+                f = sma(p, SMA_FAST)
+                s = sma(p, SMA_SLOW)
+                r = rsi(p, RSI_LEN)
+                uptrend = f is not None and s is not None and f > s
+                pullback = r is not None and r < RSI_BUY
+
+                # Position meta
+                has_pos = sym in broker.positions
+                info = state["positions"].get(sym)
+
+                # ENTRY: Uptrend + Pullback + hygiene + capacity
+                if uptrend and pullback and (not has_pos) and can_open_new:
+                    qty = size_for_risk(pv, q["ask"], risk_pct) * 0.98  # small buffer for fees/slip
+                    if qty > 0:
+                        try:
+                            res = broker.submit_order(sym, "buy", qty, q["ask"])
+                            pyramids[sym] = 0
+                            state["positions"][sym] = {
+                                "entry": res["filled_price"],
+                                "side": "long",
+                                "best": res["filled_price"],
+                                "last_add_px": res["filled_price"],
+                            }
+                            log(
+                                f"Trade 🟩 BUY {sym} qty={qty:.6f} @ {res['filled_price']:.2f} "
+                                f"(risk={risk_pct:.3%}, spread={s_bps:.2f}bps)"
+                            )
+                            # Ledger (non-blocking)
+                            record_fill_async(
+                                sym,
+                                "buy",
+                                res["filled_qty"],
+                                res["filled_price"],
+                                res.get("fee", 0.0),
+                                "entry",
+                            )
+                            # Update capacity after open
+                            open_syms.append(sym)
+                            can_open_new = len(open_syms) < MAX_CONCURRENT
+                        except Exception as e:
+                            log(f"⚠️ BUY error {sym}: {e}")
+                            if "insufficient" in str(e).lower():
+                                state["cooldown_until"] = time.time() + 300
+
+                # PYRAMIDING: on strength if already long
+                has_pos = sym in broker.positions
+                if has_pos and pyramids[sym] < MAX_PYRAMIDS:
+                    info = state["positions"][sym]
+                    gain_bps = (q["bid"] / info["last_add_px"] - 1.0) * 10000.0
+                    if gain_bps >= PYRAMID_GAIN_BPS:
+                        add_qty = size_for_risk(pv, q["ask"], risk_pct * 0.6)  # smaller adds
+                        if add_qty > 0:
+                            try:
+                                res = broker.submit_order(sym, "buy", add_qty, q["ask"])
+                                pyramids[sym] += 1
+                                info["last_add_px"] = res["filled_price"]
+                                info["best"] = max(info["best"], res["filled_price"])
+                                log(
+                                    f"Trade ➕ PYRAMID {sym} add={add_qty:.6f} @ {res['filled_price']:.2f} "
+                                    f"(step={gain_bps:.1f}bps, stacks={pyramids[sym]}/{MAX_PYRAMIDS})"
+                                )
+                                record_fill_async(
+                                    sym,
+                                    "buy",
+                                    res["filled_qty"],
+                                    res["filled_price"],
+                                    res.get("fee", 0.0),
+                                    "pyramid",
+                                )
+                            except Exception as e:
+                                log(f"⚠️ PYRAMID error {sym}: {e}")
+
+                # EXIT MANAGEMENT: trailing / BE / TP
+                if sym in broker.positions:
+                    info = state["positions"][sym]
+                    info["best"] = max(info["best"], q["bid"])
+                    hs, ts, tp = adapt_exits(info["entry"], info["best"], "long", vol_bp)
+
+                    # Move stop to BE once +0.35%
+                    be_gate = info["entry"] * 1.0035
+                    if q["bid"] >= be_gate:
+                        hs = max(hs, info["entry"])
+
+                    exit_px, reason = None, None
+                    if q["bid"] <= hs:
+                        exit_px, reason = q["bid"], "HARD_STOP/BE"
+                    elif q["bid"] <= ts:
+                        exit_px, reason = q["bid"], "TRAIL"
+                    elif q["bid"] >= tp:
+                        exit_px, reason = q["bid"], "TAKE_PROFIT"
+
+                    if exit_px:
+                        qty = broker.positions[sym]["qty"]
+                        try:
+                            res = broker.submit_order(sym, "sell", qty, exit_px)
+                            pnl = (res["filled_price"] - info["entry"]) * qty
+                            won = pnl >= 0
+                            if won:
+                                state["streak"]["wins"] += 1
+                                state["streak"]["losses"] = 0
+                                state["streak"]["last_result"] = "win"
+                                cooldown = COOLDOWN_WIN_SEC
+                            else:
+                                state["streak"]["losses"] += 1
+                                state["streak"]["wins"] = 0
+                                state["streak"]["last_result"] = "loss"
+                                cooldown = COOLDOWN_LOSS_SEC
+
+                            log(
+                                f"Trade 🟥 SELL {sym} qty={qty:.6f} @ {res['filled_price']:.2f} | {reason} | "
+                                f"{'profit' if won else 'loss'} {pnl:.2f}"
+                            )
+                            record_fill_async(
+                                sym,
+                                "sell",
+                                res["filled_qty"],
+                                res["filled_price"],
+                                res.get("fee", 0.0),
+                                reason,
+                            )
+                            # Clear local meta & pyramids
+                            state["positions"].pop(sym, None)
+                            pyramids[sym] = 0
+                            # Short cooldown to avoid churn
+                            state["cooldown_until"] = time.time() + cooldown
+                            # After closing, capacity opens up for new entries
+                            open_syms = list(broker.positions.keys())
+                            can_open_new = len(open_syms) < MAX_CONCURRENT
+                        except Exception as e:
+                            log(f"⚠️ SELL error {sym}: {e}")
+
+            # Persist state
+            write_state(state)
+            time.sleep(LOOP_SLEEP_SEC)
+
+        except Exception as e:
+            # Robust error handling with backoff (keeps Guardian happy)
+            log(f"💥 Loop error: {e}\n{traceback.format_exc()}")
+            time.sleep(ERROR_BACKOFF_SEC)
+
+    log("👋 Exiting cleanly.")
+    write_state(state)
+
+
+# ────────────────────────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    main()

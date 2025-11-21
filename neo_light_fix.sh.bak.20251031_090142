@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+# ============================================================
+# 🌍 NeoLight Guardian v15.9 — Fully Autonomous & Pipefail-Proof
+# Single-instance • Self-healing • Disk-aware • Watchdog • Clean imports
+# ============================================================
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+# ---------- Paths & Config ----------
+ROOT="${ROOT:-$HOME/neolight}"
+VENV="${VENV:-$ROOT/venv}"
+LOGS="${LOGS:-$ROOT/logs}"
+RUNTIME="${RUNTIME:-$ROOT/runtime}"
+LOCK="$RUNTIME/.guardian.lock"
+
+mkdir -p "$LOGS" "$RUNTIME"
+export PATH="$VENV/bin:$PATH"
+export PYTHONPATH="${PYTHONPATH:-$ROOT}"
+cd "$ROOT" || exit 1
+
+PY="$VENV/bin/python"
+UVICORN="$VENV/bin/uvicorn"
+
+TELEGRAM_HOOK="${TELEGRAM_HOOK:-}"
+SYNC_ENABLED="${SYNC_ENABLED:-0}"
+AI_REPAIR_ENABLED="${AI_REPAIR_ENABLED:-0}"
+
+# ---------- UX Helpers ----------
+color(){ printf "\033[%sm%s\033[0m\n" "$1" "$2"; }
+note(){  color "36" "🧠 $*"; }
+ok(){    color "32" "✅ $*"; }
+warn(){  color "33" "⚠️  $*"; }
+err(){   color "31" "🛑 $*"; }
+
+send_telegram(){
+  [[ -z "$TELEGRAM_HOOK" ]] && return 0
+  curl -s -X POST "$TELEGRAM_HOOK" -d "text=$1" >/dev/null 2>&1 || true
+}
+
+# ---------- Watchdog (self-respawn) ----------
+watchdog(){
+  note "Watchdog engaged — will re-spawn Guardian if needed."
+  while true; do
+    if ! pgrep -f "neo_light_fix.sh" >/dev/null 2>&1; then
+      warn "Guardian not running! Respawning..."
+      nohup bash "$ROOT/neo_light_fix.sh" --force >/dev/null 2>&1 &
+      exit 0
+    fi
+    sleep 60
+  done
+}
+
+# ---------- Disk cleanup ----------
+cleanup_disk(){
+  local free_kb
+  free_kb=$(df -Pk "$ROOT" | awk 'NR==2 {print $4}')
+  if (( free_kb < 2000000 )); then # < 2GB
+    warn "Low disk space — cleaning logs, caches, pycache..."
+    rm -rf "$LOGS"/* || true
+    find "$ROOT" -type d -name "__pycache__" -exec rm -rf {} + || true
+    rm -rf "$HOME/Library/Caches/pip" || true
+    ok "Disk cleanup done."
+  fi
+}
+
+# ---------- Assess / Diagnose ----------
+assess(){
+  note "Assessing system health..."
+  {
+    echo "=== $(date -Is) ==="
+    df -h
+    ps -eo pid,comm,%cpu,%mem | sort -k3 -r | head -n 15
+  } > "$LOGS/system_health.log" 2>&1 || true
+}
+
+diagnose(){
+  note "Diagnosing logs..."
+  grep -E "Traceback|Error|Exception|ModuleNotFoundError" "$LOGS"/*.log \
+    > "$LOGS/diagnose_report.log" 2>/dev/null || true
+}
+
+# ---------- Ports ----------
+heal_ports(){
+  note "Healing ports..."
+  pkill -f "uvicorn.*8100" >/dev/null 2>&1 || true
+  for P in 8090 8091 8092 8093 8094 8095 8096 8097 8098 8099 8100 8105; do
+    lsof -i :$P -t | xargs -r kill -9 || true
+  done
+}
+
+# ---------- Env heal (PIPEFAIL-PROOF) ----------
+intervene(){
+  note "Healing Python environment..."
+  "$VENV/bin/pip" install --upgrade pip wheel setuptools python-dateutil >/dev/null 2>&1 || true
+
+  # Safely collect missing modules (won't fail if no matches)
+  local mods=()
+  if grep -qE "No module named '([^']+)'" "$LOGS"/*.log 2>/dev/null; then
+    while IFS= read -r m; do
+      [[ -n "$m" ]] && mods+=("$m")
+    done < <( ( grep -Eo "No module named '([^']+)'" "$LOGS"/*.log 2>/dev/null || true ) \
+              | sed -E "s/.*'([^']+)'.*/\1/" | sort -u || true )
+  fi
+
+  for m in "${mods[@]}"; do
+    "$VENV/bin/pip" install "$m" >/dev/null 2>&1 || true
+  done
+}
+
+# ---------- Optional hooks ----------
+sync_logs(){
+  [[ "$SYNC_ENABLED" == "1" ]] || return 0
+  note "Syncing logs to cloud..."
+  rclone sync "$LOGS" remote:NeoLight/logs --transfers=4 --checkers=4 >/dev/null 2>&1 || warn "Cloud sync failed"
+}
+
+ai_repair(){
+  [[ "$AI_REPAIR_ENABLED" == "1" ]] || return 0
+  note "Triggering AI repair bridge..."
+  "$PY" "$ROOT/agents/code_repair_bridge.py" >> "$LOGS/code_repair.log" 2>&1 || true
+}
+
+# ---------- Supervisor ----------
+ensure_running(){
+  local name="$1" cmd="$2" log="$3"
+  mkdir -p "$(dirname "$log")"; touch "$log"
+  note "Ensuring $name"
+  nohup bash -lc "
+    source '$VENV/bin/activate'
+    export PYTHONPATH='$ROOT'
+    cd '$ROOT'
+    backoff=2
+    while true; do
+      echo '[Guardian] Starting $name @' \$(date -Is) >> '$log'
+      $cmd >> '$log' 2>&1 &
+      pid=\$!
+      sleep 3
+      if ! kill -0 \$pid 2>/dev/null; then
+        echo '[Guardian] $name crashed. Backoff '\$backoff's' >> '$log'
+        sleep \$backoff
+        backoff=\$((backoff*2)); [ \$backoff -gt 60 ] && backoff=60
+      else
+        wait \$pid
+        backoff=2
+      fi
+    done
+  " >/dev/null 2>&1 &
+}
+
+# ---------- Force / Lock ----------
+if [[ "${1:-}" == "--force" ]]; then
+  warn "Force mode — unlocking Guardian..."
+  rm -f "$LOCK"
+fi
+
+if [[ -f "$LOCK" ]]; then
+  warn "Guardian already running ($LOCK). Exiting."
+  exit 0
+fi
+echo $$ > "$LOCK"
+
+cleanup(){
+  rm -f "$LOCK"
+  warn "Guardian stopped gracefully."
+}
+trap cleanup EXIT
+
+# ---------- Boot ----------
+note "Preparing environment..."
+mkdir -p "$LOGS"
+for f in intelligence_orchestrator smart_trader weights_bridge dashboard_v3 guardian; do
+  : > "$LOGS/$f.log"
+done
+
+cleanup_disk
+intervene
+heal_ports
+touch "$ROOT/dashboard/__init__.py" || true
+
+ensure_running "intelligence_orchestrator" "$PY ./agents/intelligence_orchestrator.py" "$LOGS/intelligence_orchestrator.log"
+ensure_running "smart_trader"            "$PY ./trader/smart_trader.py"             "$LOGS/smart_trader.log"
+ensure_running "weights_bridge"          "$PY ./agents/weights_bridge.py"           "$LOGS/weights_bridge.log"
+
+while lsof -i :8100 >/dev/null 2>&1; do
+  warn "Port 8100 busy, waiting 5s..."
+  sleep 5
+done
+ensure_running "dashboard_v3" "$UVICORN dashboard.dashboard_v3_playground:app --host 0.0.0.0 --port 8100" "$LOGS/dashboard_v3.log"
+
+# Start watchdog in the same shell (so function exists)
+(watchdog &) >/dev/null 2>&1 || true
+
+ok "Guardian v15.9 active — fully autonomous."
+send_telegram "🧩 Guardian v15.9 boot OK – $(date -Is)"
+
+# ---------- Loop ----------
+while true; do
+  assess
+  diagnose
+  intervene
+  cleanup_disk
+  sync_logs
+  ai_repair
+  sleep 300
+done

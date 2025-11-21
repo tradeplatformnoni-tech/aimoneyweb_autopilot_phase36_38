@@ -1,0 +1,35 @@
+<div class="announcement-bar" style="background: {{ section.settings.bg_color }}; color: {{ section.settings.text_color }};">
+  <p>{{ section.settings.text }}</p>
+</div>
+
+{% schema %}
+{
+  "name": "Announcement Bar",
+  "settings": [
+    {
+      "type": "text",
+      "id": "text",
+      "label": "Announcement Text",
+      "default": "🎉 New Arrivals Every Week | Free Shipping on Orders Over $50 | 30-Day Money-Back Guarantee"
+    },
+    {
+      "type": "color",
+      "id": "bg_color",
+      "label": "Background Color",
+      "default": "#2563EB"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Text Color",
+      "default": "#FFFFFF"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Announcement Bar"
+    }
+  ]
+}
+{% endschema %}
+

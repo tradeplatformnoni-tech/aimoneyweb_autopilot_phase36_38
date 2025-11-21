@@ -1,0 +1,174 @@
+#!/usr/bin/env bash
+# ============================================================
+# 🌍 NeoLight Guardian v15.7 — Fully Autonomous AI Autopilot
+# Self-healing, self-monitoring, auto-diagnosing guardian for all core modules
+# ============================================================
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+ROOT="${ROOT:-$HOME/neolight}"
+VENV="${VENV:-$ROOT/venv}"
+LOGS="${LOGS:-$ROOT/logs}"
+RUNTIME="${RUNTIME:-$ROOT/runtime}"
+LOCK="$RUNTIME/.guardian.lock"
+
+mkdir -p "$LOGS" "$RUNTIME"
+export PATH="$VENV/bin:$PATH"
+export PYTHONPATH="${PYTHONPATH:-$ROOT}"
+cd "$ROOT" || exit 1
+
+PY="$VENV/bin/python"
+UVICORN="$VENV/bin/uvicorn"
+
+# Optional integrations
+TELEGRAM_HOOK="${TELEGRAM_HOOK:-}"
+SYNC_ENABLED="${SYNC_ENABLED:-0}"
+AI_REPAIR_ENABLED="${AI_REPAIR_ENABLED:-0}"
+
+# === Output formatting ===
+color() { printf "\033[%sm%s\033[0m\n" "$1" "$2"; }
+note()  { color "36" "🧠 $*"; }
+ok()    { color "32" "✅ $*"; }
+warn()  { color "33" "⚠️  $*"; }
+err()   { color "31" "🛑 $*"; }
+
+# === Self-healing watchdog (auto-respawn) ===
+watchdog() {
+  note "Watchdog engaged — monitoring Guardian every 60s..."
+  while true; do
+    if ! pgrep -f "neo_light_fix.sh" >/dev/null; then
+      warn "Guardian not running! Respawning..."
+      nohup bash "$ROOT/neo_light_fix.sh" --force >/dev/null 2>&1 &
+      exit 0
+    fi
+    sleep 60
+  done
+}
+
+# === Telegram notification ===
+send_telegram() {
+  [[ -z "$TELEGRAM_HOOK" ]] && return 0
+  curl -s -X POST "$TELEGRAM_HOOK" -d "text=$1" >/dev/null 2>&1 || true
+}
+
+# === Disk cleanup ===
+cleanup_disk() {
+  local free_space
+  free_space=$(df -Pk "$ROOT" | awk 'NR==2 {print $4}')
+  if (( free_space < 2000000 )); then
+    warn "Low disk space (<2GB). Performing cleanup..."
+    rm -rf "$LOGS"/* || true
+    find "$ROOT" -type d -name "__pycache__" -exec rm -rf {} + || true
+    rm -rf ~/Library/Caches/pip || true
+    ok "Disk cleanup completed."
+  fi
+}
+
+# === System assessment ===
+assess() {
+  note "Assessing system health..."
+  df -h > "$LOGS/system_health.log" 2>&1 || true
+  ps -eo pid,comm,%cpu,%mem | sort -k3 -r | head -n 15 >> "$LOGS/system_health.log" || true
+}
+
+# === Diagnose logs ===
+diagnose() {
+  note "Diagnosing logs..."
+  grep -E "Traceback|Error|Exception|ModuleNotFoundError" "$LOGS"/*.log \
+    > "$LOGS/diagnose_report.log" 2>/dev/null || true
+}
+
+# === Environment fix ===
+intervene() {
+  note "Healing Python environment..."
+  "$VENV/bin/pip" install --upgrade pip wheel setuptools python-dateutil >/dev/null 2>&1 || true
+  grep -E "No module named '([^']+)'" -m3 "$LOGS"/*.log 2>/dev/null | \
+    sed -E "s/.*'([^']+)'.*/\1/" | while read -r mod; do
+      [ -n "$mod" ] && "$VENV/bin/pip" install "$mod" >/dev/null 2>&1 || true
+    done
+}
+
+# === Smart relaunch ===
+ensure_running() {
+  local name="$1" cmd="$2" log="$3"
+  mkdir -p "$(dirname "$log")"
+  touch "$log"
+  local backoff=2
+  note "Ensuring $name"
+  nohup bash -lc "
+    source '$VENV/bin/activate'
+    export PYTHONPATH='$ROOT'
+    cd '$ROOT'
+    while true; do
+      echo '[Guardian] Starting $name' >> '$log'
+      $cmd >> '$log' 2>&1 &
+      pid=\$!
+      sleep 3
+      if ! kill -0 \$pid 2>/dev/null; then
+        echo '[Guardian] $name crashed. Retrying in \$backoff sec...' >> '$log'
+        sleep \$backoff
+        backoff=\$((backoff*2))
+        [ \$backoff -gt 60 ] && backoff=60
+      else
+        wait \$pid
+        backoff=2
+      fi
+    done
+  " >/dev/null 2>&1 &
+}
+
+# === Initialization ===
+if [[ "${1:-}" == "--force" ]]; then
+  warn "Force mode activated — unlocking Guardian..."
+  rm -f "$LOCK"
+fi
+
+if [[ -f "$LOCK" ]]; then
+  warn "Guardian already running ($LOCK). Exiting."
+  exit 0
+fi
+echo $$ > "$LOCK"
+
+cleanup() {
+  rm -f "$LOCK"
+  warn "Guardian stopped gracefully."
+}
+trap cleanup EXIT
+
+# === Log preparation ===
+note "Preparing environment..."
+mkdir -p "$LOGS"
+for log in intelligence_orchestrator smart_trader weights_bridge dashboard_v3 guardian; do
+  touch "$LOGS/$log.log"
+done
+
+cleanup_disk
+intervene
+
+# === Launch services ===
+ensure_running "intelligence_orchestrator" "$PY ./agents/intelligence_orchestrator.py" "$LOGS/intelligence_orchestrator.log"
+ensure_running "smart_trader" "$PY ./trader/smart_trader.py" "$LOGS/smart_trader.log"
+ensure_running "weights_bridge" "$PY ./agents/weights_bridge.py" "$LOGS/weights_bridge.log"
+
+pkill -f "uvicorn.*8100" >/dev/null 2>&1 || true
+while lsof -i :8100 >/dev/null 2>&1; do
+  warn "Port 8100 busy, waiting 5s..."
+  sleep 5
+done
+ensure_running "dashboard_v3" "$UVICORN dashboard.dashboard_v3_playground:app --host 0.0.0.0 --port 8100" "$LOGS/dashboard_v3.log"
+
+ok "Guardian v15.7 running autonomously (self-monitoring mode)."
+
+# === Background watchdog ===
+nohup bash -c "watchdog" >/dev/null 2>&1 &
+
+# === Continuous self-healing loop ===
+while true; do
+  assess
+  diagnose
+  intervene
+  cleanup_disk
+  send_telegram "🧩 Guardian v15.7 heartbeat OK – $(date)"
+  sleep 300
+done
+

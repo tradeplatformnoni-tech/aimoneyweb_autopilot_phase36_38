@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeoLight Command Mesh</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Montserrat:wght@400;600&display=swap">
+    <link rel="stylesheet" href="/static/css/theme-neon.css">
+    <style>
+        .neo-chart { width: 100%; height: 420px; }
+        .neo-table-wrapper { overflow-x: auto; }
+    </style>
+</head>
+<body class="neo-body neo-grid-overlay">
+    <div class="neo-dashboard">
+        <header class="neo-header">
+            <div>
+                <span class="neo-hud-tag">NeoLight Command Mesh</span>
+                <h1 style="font-family: var(--font-alt); font-size: 26px; letter-spacing: 0.12em;">Wealth &amp; Sports Intelligence</h1>
+            </div>
+            <div class="neo-chip">
+                <span>Mode</span>
+                <strong id="dashboardMode">Paper</strong>
+            </div>
+        </header>
+
+        <section class="neo-stat-grid" id="stats">
+            <div class="neo-stat-card">
+                <span class="neo-stat-label">Current Equity</span>
+                <span class="neo-stat-value" id="equity">$0</span>
+            </div>
+            <div class="neo-stat-card">
+                <span class="neo-stat-label">Daily P&amp;L</span>
+                <span class="neo-stat-value" id="dailyPnl">0%</span>
+            </div>
+            <div class="neo-stat-card">
+                <span class="neo-stat-label">Total Trades</span>
+                <span class="neo-stat-value" id="totalTrades">0</span>
+            </div>
+            <div class="neo-stat-card">
+                <span class="neo-stat-label">Win Rate</span>
+                <span class="neo-stat-value" id="winRate">0%</span>
+            </div>
+            <div class="neo-stat-card">
+                <span class="neo-stat-label">Pending Approvals</span>
+                <span class="neo-stat-value" id="pendingApprovals">0</span>
+            </div>
+        </section>
+
+        <nav class="neo-tabs" role="tablist">
+            <button class="neo-tab active" data-target="overview" onclick="showPanel('overview', this)">Overview</button>
+            <button class="neo-tab" data-target="transactions" onclick="showPanel('transactions', this)">Transactions</button>
+            <button class="neo-tab" data-target="approvals" onclick="showPanel('approvals', this)">Approvals</button>
+            <button class="neo-tab" data-target="agents" onclick="showPanel('agents', this)">Agents</button>
+            <button class="neo-tab" data-target="revenue" onclick="showPanel('revenue', this)">Revenue</button>
+            <button class="neo-tab" data-target="analytics" onclick="showPanel('analytics', this)">Analytics</button>
+            <button class="neo-tab" data-target="portfolio" onclick="showPanel('portfolio', this)">Portfolio</button>
+            <button class="neo-tab" data-target="aiCohort" onclick="showPanel('aiCohort', this)">AI Cohort</button>
+            <button class="neo-tab" data-target="commodityHedges" onclick="showPanel('commodityHedges', this)">Commodity</button>
+            <button class="neo-tab" data-target="macroSignals" onclick="showPanel('macroSignals', this)">Macro</button>
+            <button class="neo-tab" data-target="neoGallery" onclick="showPanel('neoGallery', this)">Neo Gallery</button>
+            <button class="neo-tab" data-target="risk" onclick="showPanel('risk', this)">Risk</button>
+            <button class="neo-tab" data-target="events" onclick="showPanel('events', this)">Events</button>
+        </nav>
+
+        <section id="overview" class="neo-panel active">
+            <div class="neo-hud-tag">System Telemetry</div>
+            <div class="neo-chart" id="equityChart"></div>
+            <hr class="neo-glow-divider">
+            <div class="neo-hud-tag">Risk Vector</div>
+            <div class="neo-chart" id="riskChart"></div>
+        </section>
+
+        <section id="transactions" class="neo-panel">
+            <div class="neo-hud-tag">Order Flow</div>
+            <div class="neo-table-wrapper">
+                <table class="neo-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Symbol</th>
+                            <th>Side</th>
+                            <th>Quantity</th>
+                            <th>Price</th>
+                            <th>PnL</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionsTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="approvals" class="neo-panel">
+            <div class="neo-hud-tag">Pending Approvals</div>
+            <p class="neo-stat-label" style="margin-bottom: 18px;">Review and action required transactions</p>
+            <div class="neo-table-wrapper">
+                <table class="neo-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Type</th>
+                            <th>Details</th>
+                            <th>Amount</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="approvalsTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="agents" class="neo-panel">
+            <div class="neo-hud-tag">Agent Status</div>
+            <div class="neo-table-wrapper">
+                <table class="neo-table">
+                    <thead>
+                        <tr>
+                            <th>Agent</th>
+                            <th>Status</th>
+                            <th>Last Update</th>
+                            <th>Performance</th>
+                        </tr>
+                    </thead>
+                    <tbody id="agentsTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="revenue" class="neo-panel">
+            <div class="neo-hud-tag">Revenue by Agent</div>
+            <div class="neo-chart" id="revenueChart"></div>
+            <hr class="neo-glow-divider">
+            <div class="neo-table-wrapper">
+                <table class="neo-table">
+                    <thead>
+                        <tr>
+                            <th>Agent</th>
+                            <th>Total Revenue</th>
+                            <th>Total Cost</th>
+                            <th>Net P&amp;L</th>
+                            <th>ROI %</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="revenueTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="analytics" class="neo-panel">
+            <div class="neo-hud-tag">Analytics &amp; Intelligence</div>
+            <div class="neo-chart" id="sentimentChart"></div>
+            <hr class="neo-glow-divider">
+            <div class="neo-chart" id="strategyChart"></div>
+        </section>
+
+        <section id="portfolio" class="neo-panel">
+            <div class="neo-hud-tag">Portfolio Analytics</div>
+            <div class="neo-chart" id="attributionChart"></div>
+            <hr class="neo-glow-divider">
+            <div class="neo-chart" id="factorExposureChart"></div>
+            <div class="neo-table-wrapper" style="margin-top: 24px;">
+                <table class="neo-table">
+                    <thead>
+                        <tr>
+                            <th>Strategy</th>
+                            <th>Allocation %</th>
+                            <th>Contribution %</th>
+                            <th>Sharpe</th>
+                            <th>Trades</th>
+                        </tr>
+                    </thead>
+                    <tbody id="portfolioTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="aiCohort" class="neo-panel">
+            <div class="neo-hud-tag">AI Rotation Cohort</div>
+            <div class="neo-stat-grid" style="margin-bottom: 24px;">
+                <div class="neo-stat-card">
+                    <span class="neo-stat-label">Total Allocation</span>
+                    <span class="neo-stat-value" id="aiCohortWeight">0%</span>
+                </div>
+                <div class="neo-stat-card">
+                    <span class="neo-stat-label">Top Weighted Symbol</span>
+                    <span class="neo-stat-value" id="aiCohortTop">—</span>
+                </div>
+            </div>
+            <div class="neo-table-wrapper">
+                <table class="neo-table">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Weight %</th>
+                            <th>Last Price</th>
+                            <th>Source</th>
+                        </tr>
+                    </thead>
+                    <tbody id="aiCohortTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="commodityHedges" class="neo-panel">
+            <div class="neo-hud-tag">Commodity Hedges</div>
+            <div class="neo-stat-grid" style="margin-bottom: 24px;">
+                <div class="neo-stat-card">
+                    <span class="neo-stat-label">Total Allocation</span>
+                    <span class="neo-stat-value" id="commodityWeight">0%</span>
+                </div>
+                <div class="neo-stat-card">
+                    <span class="neo-stat-label">Top Hedge</span>
+                    <span class="neo-stat-value" id="commodityTop">—</span>
+                </div>
+            </div>
+            <div class="neo-table-wrapper">
+                <table class="neo-table">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Weight %</th>
+                            <th>Last Price</th>
+                            <th>Source</th>
+                        </tr>
+                    </thead>
+                    <tbody id="commodityTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="macroSignals" class="neo-panel">
+            <div class="neo-hud-tag">Macro Signals</div>
+            <div class="neo-stat-grid" style="margin-bottom: 24px;">
+                <div class="neo-stat-card">
+                    <span class="neo-stat-label">30Y-5Y Yield Spread (bp)</span>
+                    <span class="neo-stat-value" id="macroYieldSpread">--</span>
+                </div>
+            </div>
+            <div class="neo-table-wrapper">
+                <table class="neo-table">
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody id="macroSignalsTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="neoGallery" class="neo-panel">
+            <div class="neo-hud-tag">Neo Gallery</div>
+            <p class="neo-stat-label" style="margin-bottom: 18px;">Curated imagery shaping the command center aesthetic.</p>
+            <div class="neo-gallery" id="neoGalleryGrid"></div>
+        </section>
+
+        <section id="risk" class="neo-panel">
+            <div class="neo-hud-tag">Risk Attribution</div>
+            <div class="neo-stat-card" style="margin-bottom: 24px;">
+                <span class="neo-stat-label">Diversification Score</span>
+                <span class="neo-stat-value" id="diversificationScore">0/100</span>
+            </div>
+            <div class="neo-chart" id="riskContributionChart"></div>
+            <div class="neo-table-wrapper" style="margin-top: 24px;">
+                <table class="neo-table">
+                    <thead>
+                        <tr>
+                            <th>Strategy</th>
+                            <th>Allocation %</th>
+                            <th>Risk Contribution %</th>
+                            <th>Volatility %</th>
+                            <th>Alert</th>
+                        </tr>
+                    </thead>
+                    <tbody id="riskTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="events" class="neo-panel">
+            <div class="neo-hud-tag">Event Stream</div>
+            <div style="margin-bottom: 20px; display:flex; gap:12px; align-items:center;">
+                <button class="neo-btn neo-btn-primary" onclick="loadEvents()">Refresh Events</button>
+                <select id="eventFilter" class="neo-select" onchange="loadEvents()">
+                    <option value="">All Events</option>
+                    <option value="BUY">BUY</option>
+                    <option value="SELL">SELL</option>
+                    <option value="SIGNAL_BUY">SIGNAL_BUY</option>
+                    <option value="SIGNAL_SELL">SIGNAL_SELL</option>
+                    <option value="REGIME_CHANGE">REGIME_CHANGE</option>
+                </select>
+            </div>
+            <div class="neo-table-wrapper">
+                <table class="neo-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Type</th>
+                            <th>Source</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody id="eventsTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <div class="auto-refresh neo-chip">
+            <span>Auto Refresh</span>
+            <strong id="refreshStatus">ON</strong>
+            <span>Last Ping</span>
+            <strong id="lastUpdate">–</strong>
+        </div>
+        <div class="neo-audio-toggle" id="audioControls" style="display:none;">
+            <button class="neo-btn neo-btn-primary" id="audioToggle">Enable Ambient</button>
+            <span id="audioStatus">Muted</span>
+            <audio id="ambientAudio" loop preload="auto" src="/static/audio/ambient_loop.mp3"></audio>
+        </div>
+    </div>
+
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
+

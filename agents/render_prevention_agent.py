@@ -139,11 +139,24 @@ def apply_preventive_measures(resources: dict[str, Any], validation: dict[str, A
 
 
 def main() -> None:
-    """Main prevention loop."""
+    """Main prevention loop with ML predictions."""
     print(
-        f"[prevention] 🛡️ Render Prevention Agent starting @ {datetime.now(UTC).isoformat()}Z",
+        f"[prevention] 🛡️ World-Class Prevention Agent starting @ {datetime.now(UTC).isoformat()}Z",
         flush=True,
     )
+
+    # Import world-class components
+    try:
+        from agents.ml_failure_predictor import predict_all_agents
+        from agents.anomaly_detector import detect_anomalies_all_agents
+        from agents.predictive_maintenance import analyze_agents_for_maintenance
+        from utils.metrics_collector import record_system_resources, save_metrics
+
+        HAS_WORLD_CLASS = True
+        print("[prevention] ✅ World-class components loaded", flush=True)
+    except ImportError as e:
+        HAS_WORLD_CLASS = False
+        print(f"[prevention] ⚠️ World-class components not available: {e}", flush=True)
 
     check_interval = int(os.getenv("PREVENTION_INTERVAL", "300"))  # Every 5 minutes
 
@@ -152,11 +165,58 @@ def main() -> None:
             # Check resources
             resources = check_resources()
 
+            # Record system resources
+            if HAS_WORLD_CLASS:
+                record_system_resources(
+                    resources["cpu"]["used_pct"],
+                    resources["memory"]["used_pct"],
+                    resources["disk"]["used_pct"],
+                )
+
             # Validate dependencies
             dependencies = validate_dependencies()
 
             # Validate configuration
             configuration = validate_configuration()
+
+            # World-Class: Get agent status for predictions
+            agent_status = {}
+            if HAS_WORLD_CLASS:
+                try:
+                    status_file = STATE / "agent_status.json"
+                    if status_file.exists():
+                        agent_status = json.loads(status_file.read_text())
+
+                    # Failure predictions
+                    if agent_status:
+                        predictions = predict_all_agents(agent_status)
+                        for agent_name, prob in predictions.items():
+                            if prob > 0.7:
+                                print(
+                                    f"[prevention] 🎯 High failure risk: {agent_name} ({prob:.2%})",
+                                    flush=True,
+                                )
+
+                    # Anomaly detection
+                    if agent_status:
+                        anomalies = detect_anomalies_all_agents(agent_status)
+                        for agent_name, detection in anomalies.items():
+                            if detection.get("is_anomaly"):
+                                print(
+                                    f"[prevention] 🚨 Anomaly detected: {agent_name}",
+                                    flush=True,
+                                )
+
+                    # Predictive maintenance
+                    if agent_status:
+                        maintenance_recs = analyze_agents_for_maintenance(agent_status)
+                        if maintenance_recs:
+                            print(
+                                f"[prevention] 🔧 Maintenance recommendations: {len(maintenance_recs)}",
+                                flush=True,
+                            )
+                except Exception as e:
+                    print(f"[prevention] World-class analysis error: {e}", flush=True)
 
             # Apply preventive measures
             apply_preventive_measures(resources, dependencies)
@@ -172,6 +232,10 @@ def main() -> None:
                 PREVENTION_STATE_FILE.write_text(json.dumps(state, indent=2))
             except Exception:
                 pass
+
+            # World-Class: Save metrics
+            if HAS_WORLD_CLASS:
+                save_metrics()
 
             # Log summary
             all_ok = (

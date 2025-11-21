@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Service Label -->
+    <key>Label</key>
+    <string>com.neolight.trading</string>
+    
+    <!-- Program to Execute -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/oluwaseyeakinbola/.cursor/worktrees/neolight/b65Kv/scripts/start_trading_stack.sh</string>
+    </array>
+    
+    <!-- Run on system boot/login -->
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <!-- Keep the process alive - restart if it crashes -->
+    <key>KeepAlive</key>
+    <dict>
+        <!-- Don't restart if exit was clean (exit code 0) -->
+        <key>SuccessfulExit</key>
+        <false/>
+        <!-- Restart if crashed or abnormal exit -->
+        <key>Crashed</key>
+        <true/>
+    </dict>
+    
+    <!-- Working Directory -->
+    <key>WorkingDirectory</key>
+    <string>/Users/oluwaseyeakinbola/.cursor/worktrees/neolight/b65Kv</string>
+    
+    <!-- Standard Output Log -->
+    <key>StandardOutPath</key>
+    <string>/Users/oluwaseyeakinbola/.cursor/worktrees/neolight/b65Kv/logs/trading_launchd.log</string>
+    
+    <!-- Standard Error Log -->
+    <key>StandardErrorPath</key>
+    <string>/Users/oluwaseyeakinbola/.cursor/worktrees/neolight/b65Kv/logs/trading_launchd_error.log</string>
+    
+    <!-- Environment Variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/oluwaseyeakinbola/.cursor/worktrees/neolight/b65Kv/venv/bin</string>
+        <key>HOME</key>
+        <string>/Users/oluwaseyeakinbola</string>
+        <key>PYTHONPATH</key>
+        <string>/Users/oluwaseyeakinbola/.cursor/worktrees/neolight/b65Kv</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+    
+    <!-- Throttle restarts - wait 60 seconds between restart attempts -->
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+    
+    <!-- Process Type - Adaptive for long-running services -->
+    <key>ProcessType</key>
+    <string>Adaptive</string>
+    
+    <!-- Nice level (lower priority to not impact system performance) -->
+    <key>Nice</key>
+    <integer>5</integer>
+    
+</dict>
+</plist>
+

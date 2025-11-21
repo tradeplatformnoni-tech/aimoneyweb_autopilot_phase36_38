@@ -1,0 +1,6 @@
+# Minimal requirements for render_app_simple.py
+# Only what's needed for the simplified FastAPI app
+
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+

@@ -1,0 +1,26 @@
+#!/bin/bash
+# Quick Phase Status Display
+cd ~/neolight
+
+echo "======================================================================"
+echo "📊 NEOLIGHT PHASE STATUS - QUICK REFERENCE"
+echo "======================================================================"
+echo ""
+echo "✅ COMPLETED: 23 Phases"
+echo "   • Foundation (900-2500): 7 phases"
+echo "   • Guardian & Telemetry (5400-5900): 3 phases"  
+echo "   • Hybrid Architecture (6000-7000): 4 phases"
+echo "   • Advanced Risk & Execution (7100-7900): 9 phases"
+echo ""
+echo "⏳ PENDING: 14 Phases"
+echo "   • Immediate Next (2500-3500): 5 phases"
+echo "   • Strategic (3500-4500): 5 phases"
+echo "   • Future (4500+): 4 phases"
+echo ""
+echo "📈 COMPLETION RATE: 62% (23/37 phases)"
+echo ""
+echo "🎯 NEXT RECOMMENDED: Phase 2500-2700 (Portfolio Optimization)"
+echo ""
+echo "📄 Full Report: cat ~/neolight/PHASE_COMPLETION_STATUS.md"
+echo "📋 Diagnosis: bash ~/neolight/scripts/diagnose_phases.sh"
+echo "======================================================================"

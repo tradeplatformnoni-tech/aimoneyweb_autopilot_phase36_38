@@ -1,0 +1,38 @@
+<svg width="560" height="360" viewBox="0 0 560 360" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="earth" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#052747"/>
+      <stop offset="100%" stop-color="#02060f"/>
+    </radialGradient>
+    <linearGradient id="orbit" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff8b2a"/>
+      <stop offset="100%" stop-color="#ffd288"/>
+    </linearGradient>
+  </defs>
+  <rect width="560" height="360" fill="#030812"/>
+  <circle cx="280" cy="180" r="140" fill="url(#earth)" stroke="#00f6ff" stroke-width="2" opacity="0.9"/>
+  <circle cx="280" cy="180" r="150" stroke="rgba(0,246,255,0.25)" stroke-width="1" fill="none" stroke-dasharray="6 10"/>
+  <path d="M140 120 C200 40, 360 40, 420 120" stroke="url(#orbit)" stroke-width="4" fill="none" opacity="0.8"/>
+  <path d="M140 240 C200 320, 360 320, 420 240" stroke="url(#orbit)" stroke-width="4" fill="none" opacity="0.65"/>
+  <g transform="translate(120 80) rotate(-12)">
+    <rect x="0" y="0" width="32" height="12" fill="#00f6ff" opacity="0.8"/>
+    <rect x="12" y="12" width="8" height="30" fill="#ff8b2a" opacity="0.85"/>
+    <rect x="20" y="12" width="8" height="30" fill="#ff8b2a" opacity="0.55"/>
+  </g>
+  <g transform="translate(420 210) rotate(22)">
+    <rect x="0" y="0" width="34" height="12" fill="#00f6ff" opacity="0.8"/>
+    <rect x="12" y="12" width="8" height="30" fill="#ff8b2a" opacity="0.85"/>
+    <rect x="22" y="12" width="8" height="30" fill="#ff8b2a" opacity="0.55"/>
+  </g>
+  <text x="36" y="50" fill="#ff8b2a" font-family="IBM Plex Mono, monospace" font-size="14" letter-spacing="6">GLOBAL SAT VECTOR // PLACEHOLDER</text>
+  <text x="36" y="72" fill="#00f6ff" font-family="IBM Plex Mono, monospace" font-size="12" letter-spacing="4">ORBITAL STATUS MOCK</text>
+  <g fill="#00f6ff" font-family="IBM Plex Mono, monospace" font-size="11" letter-spacing="4" opacity="0.85">
+    <text x="48" y="110">SAT-01  ALT: 22.4K</text>
+    <text x="48" y="132">SAT-02  ALT: 30.8K</text>
+    <text x="48" y="154">SAT-03  ALT: 18.6K</text>
+    <text x="380" y="110">CAL: OK</text>
+    <text x="380" y="132">ALIGN: MAN</text>
+    <text x="380" y="154">ORBIT: LOCK</text>
+  </g>
+</svg>
+

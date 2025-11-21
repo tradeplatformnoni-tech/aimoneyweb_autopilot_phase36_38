@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="640" height="360" viewBox="0 0 640 360" xmlns="http://www.w3.org/2000/svg">
+  <rect width="640" height="360" fill="#111827"/>
+  <rect x="24" y="24" width="592" height="312" rx="16" fill="#0f172a" stroke="#1f2937" stroke-width="2"/>
+  <text x="40" y="56" fill="#34d399" font-family="Helvetica, Arial, sans-serif" font-size="20">PrecisionCare Compliance Radar</text>
+
+  <circle cx="200" cy="192" r="120" fill="#052e16" stroke="#22c55e" stroke-width="2" opacity="0.6"/>
+  <circle cx="200" cy="192" r="90" fill="none" stroke="#166534" stroke-width="1" stroke-dasharray="6 6"/>
+  <circle cx="200" cy="192" r="60" fill="none" stroke="#16a34a" stroke-width="1" stroke-dasharray="6 6"/>
+  <circle cx="200" cy="192" r="30" fill="none" stroke="#4ade80" stroke-width="1" stroke-dasharray="4 4"/>
+
+  <polygon points="200,92 278,147 252,252 142,274 110,176"
+           fill="#22c55e" opacity="0.55" stroke="#86efac" stroke-width="2"/>
+  <text x="184" y="84" fill="#86efac" font-family="Helvetica, Arial, sans-serif" font-size="12">HIPAA</text>
+  <text x="288" y="142" fill="#86efac" font-family="Helvetica, Arial, sans-serif" font-size="12">PCI</text>
+  <text x="264" y="268" fill="#86efac" font-family="Helvetica, Arial, sans-serif" font-size="12">SOC2</text>
+  <text x="64" y="288" fill="#86efac" font-family="Helvetica, Arial, sans-serif" font-size="12">PHI Guard</text>
+  <text x="72" y="170" fill="#86efac" font-family="Helvetica, Arial, sans-serif" font-size="12">Audit Trail</text>
+
+  <rect x="344" y="92" width="248" height="70" rx="12" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="360" y="118" fill="#c7d2fe" font-family="Helvetica, Arial, sans-serif" font-size="16">Guardian Sentinel Status</text>
+  <circle cx="376" cy="140" r="8" fill="#34d399"/>
+  <text x="392" y="144" fill="#e0e7ff" font-family="Helvetica, Arial, sans-serif" font-size="13">Autonomous Watchers (Green)</text>
+
+  <rect x="344" y="180" width="248" height="70" rx="12" fill="#312e81" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="360" y="206" fill="#ddd6fe" font-family="Helvetica, Arial, sans-serif" font-size="16">Policy Deviation Queue</text>
+  <text x="360" y="228" fill="#c4b5fd" font-family="Helvetica, Arial, sans-serif" font-size="13">0 critical · 2 warning · auto-remediation active</text>
+
+  <rect x="344" y="268" width="248" height="50" rx="12" fill="#0f172a" stroke="#64748b" stroke-dasharray="6 6" stroke-width="1.5"/>
+  <text x="360" y="296" fill="#CBD5F5" font-family="Helvetica, Arial, sans-serif" font-size="13">Generated illustration – replace with redacted compliance dashboard capture.</text>
+</svg>
+

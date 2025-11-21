@@ -410,60 +410,226 @@ def restart_agent(agent_name: str, state: dict[str, Any]) -> bool:
 
 
 def main() -> None:
-    """Main self-healing loop."""
+    """Main self-healing loop with world-class capabilities."""
     print(
-        f"[self_healing] 🛡️ Render Self-Healing Agent starting @ {datetime.now(UTC).isoformat()}Z",
+        f"[self_healing] 🛡️ World-Class Self-Healing Agent starting @ {datetime.now(UTC).isoformat()}Z",
         flush=True,
     )
     print(f"[self_healing] RENDER_MODE: {RENDER_MODE}", flush=True)
+
+    # Import world-class components
+    try:
+        from agents.ml_failure_predictor import predict_all_agents
+        from agents.anomaly_detector import detect_anomalies_all_agents
+        from agents.rca_engine import RCAEngine
+        from agents.intelligent_fix_selector import select_fix, record_fix_result
+        from agents.adaptive_recovery import get_optimal_recovery_strategy, record_recovery_result
+        from agents.application_recovery import recover_application_layer
+        from agents.infrastructure_recovery import recover_infrastructure_layer
+        from agents.data_recovery import recover_data_layer
+        from utils.metrics_collector import (
+            record_agent_health,
+            record_agent_error,
+            record_recovery_time,
+            record_prediction_accuracy,
+            record_anomaly_detection,
+            save_metrics,
+        )
+        from utils.tracing import trace_operation, get_correlation_id
+
+        HAS_WORLD_CLASS = True
+        rca_engine = RCAEngine()
+        print("[self_healing] ✅ World-class components loaded", flush=True)
+    except ImportError as e:
+        HAS_WORLD_CLASS = False
+        print(f"[self_healing] ⚠️ World-class components not available: {e}", flush=True)
+        rca_engine = None
 
     check_interval = int(os.getenv("SELF_HEALING_INTERVAL", "60"))  # Check every minute
 
     while True:
         try:
-            state = load_state()
-            state["last_check"] = datetime.now(UTC).isoformat()
+            correlation_id = get_correlation_id()
+            with trace_operation("self_healing_cycle", correlation_id=correlation_id):
+                state = load_state()
+                state["last_check"] = datetime.now(UTC).isoformat()
 
-            agent_status = {}
+                agent_status = {}
 
-            # Check all agents
-            for agent_name in EXPECTED_AGENTS:
-                health = check_agent_health(agent_name)
-                agent_status[agent_name] = health
+                # Check all agents
+                for agent_name in EXPECTED_AGENTS:
+                    with trace_operation(f"check_agent_{agent_name}", agent=agent_name):
+                        health = check_agent_health(agent_name)
+                        agent_status[agent_name] = health
 
-                # If agent is stopped or has errors, analyze and fix
-                if health["status"] == "stopped":
-                    print(f"[self_healing] ⚠️ {agent_name} is stopped", flush=True)
-                    error_analysis = {"fix": "agent_exit", "severity": "high"}
-                    apply_fix(agent_name, error_analysis, state)
+                        # Record metrics
+                        if HAS_WORLD_CLASS:
+                            health_score = 1.0 if health["status"] == "healthy" else (0.5 if health["status"] == "degraded" else 0.0)
+                            record_agent_health(agent_name, health_score)
 
-                elif health["status"] == "degraded" and health["errors"]:
-                    # Analyze errors
-                    for error in health["errors"][:3]:  # Check first 3 errors
-                        error_analysis = analyze_error(error)
-                        if error_analysis:
+                # World-Class: Failure Prediction
+                if HAS_WORLD_CLASS:
+                    try:
+                        predictions = predict_all_agents(agent_status)
+                        for agent_name, prob in predictions.items():
+                            if prob > 0.7:
+                                print(
+                                    f"[self_healing] 🎯 High failure risk predicted for {agent_name}: {prob:.2%}",
+                                    flush=True,
+                                )
+                                send_telegram(
+                                    f"⚠️ **Failure Predicted**\nAgent: `{agent_name}`\nProbability: {prob:.2%}"
+                                )
+                    except Exception as e:
+                        print(f"[self_healing] Prediction error: {e}", flush=True)
+
+                # World-Class: Anomaly Detection
+                if HAS_WORLD_CLASS:
+                    try:
+                        anomalies = detect_anomalies_all_agents(agent_status)
+                        for agent_name, detection in anomalies.items():
+                            if detection.get("is_anomaly"):
+                                record_anomaly_detection(agent_name)
+                    except Exception as e:
+                        print(f"[self_healing] Anomaly detection error: {e}", flush=True)
+
+                # World-Class: Multi-Layer Recovery Check
+                if HAS_WORLD_CLASS:
+                    try:
+                        # Data layer recovery
+                        data_recovery = recover_data_layer()
+                        if data_recovery.get("status") == "recovered":
+                            print("[self_healing] ✅ Data layer recovered", flush=True)
+
+                        # Infrastructure layer recovery (periodic)
+                        if int(time.time()) % 3600 == 0:  # Every hour
+                            infra_recovery = recover_infrastructure_layer()
+                            if infra_recovery.get("render_service", {}).get("status") != "active":
+                                print("[self_healing] ⚠️ Infrastructure issues detected", flush=True)
+                    except Exception as e:
+                        print(f"[self_healing] Multi-layer recovery error: {e}", flush=True)
+
+                # Process agent issues with world-class capabilities
+                for agent_name in EXPECTED_AGENTS:
+                    health = agent_status[agent_name]
+
+                    # If agent is stopped or has errors, use world-class recovery
+                    if health["status"] == "stopped":
+                        print(f"[self_healing] ⚠️ {agent_name} is stopped", flush=True)
+
+                        # World-Class: RCA Analysis
+                        root_cause = None
+                        if HAS_WORLD_CLASS and rca_engine and health.get("errors"):
+                            error_log = "\n".join(health["errors"][:5])
+                            rca_result = rca_engine.analyze_failure(agent_name, error_log)
+                            root_cause = rca_result.get("root_cause")
                             print(
-                                f"[self_healing] 🔍 {agent_name} error detected: {error_analysis['type']}",
+                                f"[self_healing] 🔍 RCA: {root_cause} (confidence: {rca_result.get('confidence', 0):.2%})",
                                 flush=True,
                             )
-                            apply_fix(agent_name, error_analysis, state)
-                            break  # Fix one error at a time
 
-            # Save status
-            try:
-                AGENT_STATUS_FILE.write_text(json.dumps(agent_status, indent=2))
-            except Exception:
-                pass
+                        # World-Class: Intelligent Fix Selection
+                        if HAS_WORLD_CLASS:
+                            error_type = "agent_exit"
+                            fix_selection = select_fix(agent_name, error_type, root_cause)
+                            fix_type = fix_selection["selected_fix"]
+                            print(
+                                f"[self_healing] 🧠 Selected fix: {fix_type} (success rate: {fix_selection['success_rate']:.2%})",
+                                flush=True,
+                            )
+                        else:
+                            fix_type = "agent_exit"
 
-            # Save state
-            save_state(state)
+                        # World-Class: Adaptive Recovery Strategy
+                        if HAS_WORLD_CLASS:
+                            strategy = get_optimal_recovery_strategy(agent_name, "agent_exit")
+                        else:
+                            strategy = {"backoff_initial": 2, "max_attempts": 5}
 
-            # Log summary
-            healthy_count = sum(1 for a in agent_status.values() if a["status"] == "healthy")
-            print(
-                f"[self_healing] ✅ Health check complete: {healthy_count}/{len(EXPECTED_AGENTS)} agents healthy",
-                flush=True,
-            )
+                        # Apply fix
+                        error_analysis = {"fix": fix_type, "severity": "high"}
+                        start_time = time.time()
+                        success = apply_fix(agent_name, error_analysis, state)
+                        recovery_time = time.time() - start_time
+
+                        # World-Class: Record results
+                        if HAS_WORLD_CLASS:
+                            record_fix_result(agent_name, error_type, fix_type, success, root_cause)
+                            record_recovery_result(agent_name, error_type, fix_type, success, recovery_time)
+                            record_recovery_time(agent_name, recovery_time)
+                            if not success:
+                                record_agent_error(agent_name, error_type)
+
+                    elif health["status"] == "degraded" and health["errors"]:
+                        # Analyze errors with world-class capabilities
+                        for error in health["errors"][:3]:  # Check first 3 errors
+                            error_analysis = analyze_error(error)
+
+                            if error_analysis:
+                                print(
+                                    f"[self_healing] 🔍 {agent_name} error detected: {error_analysis['type']}",
+                                    flush=True,
+                                )
+
+                                # World-Class: RCA
+                                root_cause = None
+                                if HAS_WORLD_CLASS and rca_engine:
+                                    rca_result = rca_engine.analyze_failure(agent_name, error)
+                                    root_cause = rca_result.get("root_cause")
+
+                                # World-Class: Intelligent Fix Selection
+                                if HAS_WORLD_CLASS:
+                                    fix_selection = select_fix(
+                                        agent_name, error_analysis["type"], root_cause
+                                    )
+                                    error_analysis["fix"] = fix_selection["selected_fix"]
+
+                                # Apply fix
+                                start_time = time.time()
+                                success = apply_fix(agent_name, error_analysis, state)
+                                recovery_time = time.time() - start_time
+
+                                # World-Class: Record results
+                                if HAS_WORLD_CLASS:
+                                    record_fix_result(
+                                        agent_name,
+                                        error_analysis["type"],
+                                        error_analysis["fix"],
+                                        success,
+                                        root_cause,
+                                    )
+                                    record_recovery_result(
+                                        agent_name,
+                                        error_analysis["type"],
+                                        error_analysis["fix"],
+                                        success,
+                                        recovery_time,
+                                    )
+                                    record_recovery_time(agent_name, recovery_time)
+                                    if not success:
+                                        record_agent_error(agent_name, error_analysis["type"])
+
+                                break  # Fix one error at a time
+
+                # Save status
+                try:
+                    AGENT_STATUS_FILE.write_text(json.dumps(agent_status, indent=2))
+                except Exception:
+                    pass
+
+                # Save state
+                save_state(state)
+
+                # World-Class: Save metrics
+                if HAS_WORLD_CLASS:
+                    save_metrics()
+
+                # Log summary
+                healthy_count = sum(1 for a in agent_status.values() if a["status"] == "healthy")
+                print(
+                    f"[self_healing] ✅ Health check complete: {healthy_count}/{len(EXPECTED_AGENTS)} agents healthy",
+                    flush=True,
+                )
 
         except Exception as e:
             print(f"[self_healing] ❌ Error in main loop: {e}", flush=True)

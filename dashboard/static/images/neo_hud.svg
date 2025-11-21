@@ -1,0 +1,32 @@
+<svg width="560" height="400" viewBox="0 0 560 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgHud" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#030914"/>
+      <stop offset="100%" stop-color="#010309"/>
+    </linearGradient>
+  </defs>
+  <rect width="560" height="400" fill="url(#bgHud)"/>
+  <rect x="24" y="24" width="220" height="120" fill="none" stroke="#00f6ff" stroke-width="2" rx="12"/>
+  <text x="40" y="54" fill="#00f6ff" font-family="IBM Plex Mono, monospace" font-size="12" letter-spacing="6">PARAMETERS</text>
+  <line x1="40" y1="70" x2="220" y2="70" stroke="rgba(0,246,255,0.25)" stroke-width="1"/>
+  <text x="40" y="96" fill="#ff8b2a" font-family="IBM Plex Mono, monospace" font-size="12" letter-spacing="4">NO. BUILDINGS: 32</text>
+  <text x="40" y="120" fill="#ff8b2a" font-family="IBM Plex Mono, monospace" font-size="12" letter-spacing="4">SUBLEVELS: 08</text>
+  <rect x="280" y="40" width="260" height="160" fill="none" stroke="#ff8b2a" stroke-width="2" rx="12"/>
+  <text x="300" y="74" fill="#ff8b2a" font-family="IBM Plex Mono, monospace" font-size="12" letter-spacing="6">GEOGRAPHIC REFERENCE</text>
+  <rect x="300" y="90" width="220" height="100" fill="none" stroke="#00f6ff" stroke-width="1" rx="8"/>
+  <text x="312" y="116" fill="#00f6ff" font-family="IBM Plex Mono, monospace" font-size="10" letter-spacing="4">USER: ARCAN_9022XPAL</text>
+  <text x="312" y="138" fill="#00f6ff" font-family="IBM Plex Mono, monospace" font-size="10" letter-spacing="4">SESSION ID: #040/12</text>
+  <text x="40" y="190" fill="#ff8b2a" font-family="IBM Plex Mono, monospace" font-size="12" letter-spacing="8">SUPER TERRAIN 86</text>
+  <rect x="40" y="210" width="480" height="150" fill="none" stroke="#00f6ff" stroke-width="2" rx="16"/>
+  <g fill="none" stroke="#ff8b2a" stroke-width="2">
+    <rect x="70" y="240" width="90" height="90" rx="12"/>
+    <rect x="180" y="240" width="90" height="90" rx="12"/>
+    <rect x="290" y="240" width="90" height="90" rx="12"/>
+    <rect x="400" y="240" width="90" height="90" rx="12"/>
+  </g>
+  <text x="80" y="360" fill="#00f6ff" font-family="IBM Plex Mono, monospace" font-size="10" letter-spacing="6">CITY</text>
+  <text x="190" y="360" fill="#00f6ff" font-family="IBM Plex Mono, monospace" font-size="10" letter-spacing="6">FOREST</text>
+  <text x="300" y="360" fill="#00f6ff" font-family="IBM Plex Mono, monospace" font-size="10" letter-spacing="6">OCEAN</text>
+  <text x="410" y="360" fill="#00f6ff" font-family="IBM Plex Mono, monospace" font-size="10" letter-spacing="6">MOUNTAIN</text>
+</svg>
+

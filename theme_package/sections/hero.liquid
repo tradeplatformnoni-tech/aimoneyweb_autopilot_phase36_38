@@ -1,0 +1,55 @@
+<section class="hero-section" style="background: {% if section.settings.background_image %}{{ section.settings.background_image | image_url: width: 1920 }}{% else %}linear-gradient(135deg, #667eea 0%, #764ba2 100%){% endif %}; background-size: cover; background-position: center;">
+  <div class="hero-overlay"></div>
+  <div class="hero-content">
+    <h1 class="hero-headline">{{ section.settings.headline | default: "Discover Your Perfect Match" }}</h1>
+    <p class="hero-subheadline">{{ section.settings.subheadline | default: "Premium electronics, fitness gear, and lifestyle essentials - all at unbeatable prices. Transform your daily routine with products that deliver." }}</p>
+    {% if section.settings.button_text != blank %}
+      <a href="{{ section.settings.button_link }}" class="btn-primary">
+        {{ section.settings.button_text }}
+      </a>
+    {% endif %}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Hero Section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "headline",
+      "label": "Headline",
+      "default": "Discover Your Perfect Match"
+    },
+    {
+      "type": "textarea",
+      "id": "subheadline",
+      "label": "Subheadline",
+      "default": "Premium electronics, fitness gear, and lifestyle essentials - all at unbeatable prices. Transform your daily routine with products that deliver."
+    },
+    {
+      "type": "text",
+      "id": "button_text",
+      "label": "Button Text",
+      "default": "Shop Now"
+    },
+    {
+      "type": "url",
+      "id": "button_link",
+      "label": "Button Link",
+      "default": "/collections/all"
+    },
+    {
+      "type": "image_picker",
+      "id": "background_image",
+      "label": "Background Image"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Hero Section"
+    }
+  ]
+}
+{% endschema %}
+

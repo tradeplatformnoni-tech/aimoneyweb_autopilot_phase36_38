@@ -1,0 +1,104 @@
+# NeoLight Fly.io Full Deployment Configuration
+# ============================================
+# Complete system deployment for automatic 24/7 operation
+app = "neolight-cloud"
+primary_region = "iad"  # Washington DC (low latency to US markets)
+
+[build]
+  dockerfile = "Dockerfile"
+  builder = "paketobuildpacks/builder:base"
+
+[env]
+  # Trading Mode - PAPER TRADING for safety
+  TRADING_MODE = "PAPER_TRADING_MODE"
+  ALPACA_USE_PAPER = "true"
+  NEOLIGHT_USE_ALPACA_QUOTES = "true"
+  
+  # Fly.io Environment
+  FLY_IO_MODE = "true"
+  PYTHONUNBUFFERED = "1"
+  PYTHONPATH = "/app"
+  
+  # Enable all phases by default
+  NEOLIGHT_ENABLE_REVENUE_AGENTS = "true"
+  NEOLIGHT_ENABLE_ML_PIPELINE = "true"
+  NEOLIGHT_ENABLE_ATTRIBUTION = "true"
+  NEOLIGHT_ENABLE_REGIME = "true"
+  NEOLIGHT_ENABLE_PORTFOLIO_OPTIMIZATION = "true"
+  NEOLIGHT_ENABLE_RISK_MANAGEMENT = "true"
+  NEOLIGHT_ENABLE_KELLY_SIZING = "true"
+  NEOLIGHT_ENABLE_EVENTS = "true"
+  NEOLIGHT_ENABLE_PORTFOLIO_ANALYTICS = "true"
+  NEOLIGHT_ENABLE_EXECUTION_ALGORITHMS = "true"
+  NEOLIGHT_ENABLE_ALT_DATA = "true"
+  NEOLIGHT_ENABLE_RL_ENHANCED = "true"
+  NEOLIGHT_ENABLE_BACKTESTING = "true"
+  NEOLIGHT_ENABLE_EQUITY_REPLAY = "true"
+  NEOLIGHT_ENABLE_MARKET_INTEL = "true"
+  NEOLIGHT_ENABLE_STRATEGY_RESEARCH = "true"
+  
+  # Portfolio settings
+  PORTFOLIO_OPT_CYCLE = "100"
+  RISK_ASSESSMENT_CYCLE = "200"
+  STOP_LOSS_DISTANCE = "0.02"
+  NEOLIGHT_STARTING_EQUITY = "10000"
+  
+  # Equity Replay settings
+  NEOLIGHT_EQUITY_REPLAY_INTERVAL = "86400"  # 24 hours
+
+[[services]]
+  internal_port = 8090
+  protocol = "tcp"
+  processes = ["app"]
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.checks]]
+    grace_period = "30s"
+    interval = "30s"
+    method = "GET"
+    timeout = "10s"
+    path = "/health"
+
+[[services]]
+  internal_port = 8100
+  protocol = "tcp"
+  processes = ["app"]
+
+  [[services.ports]]
+    port = 8100
+    handlers = ["http"]
+
+  [[services.checks]]
+    grace_period = "30s"
+    interval = "30s"
+    method = "GET"
+    timeout = "10s"
+    path = "/status"
+
+[processes]
+  app = "/app/scripts/flyio_startup.sh"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 2
+  memory_mb = 2048
+
+[[mounts]]
+  source = "neolight_state"
+  destination = "/app/state"
+
+[[mounts]]
+  source = "neolight_runtime"
+  destination = "/app/runtime"
+
+[[mounts]]
+  source = "neolight_logs"
+  destination = "/app/logs"
