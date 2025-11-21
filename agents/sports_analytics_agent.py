@@ -1765,7 +1765,32 @@ def process_sport(sport: str) -> dict[str, Any]:
         )
         realtime_schedules = None
 
+    # Track if we're in real-time-only mode (no historical data)
+    realtime_only_mode = not games and realtime_schedules and realtime_schedules.get(sport)
+    
+    # If no historical data but we have real-time schedules, use them for fallback predictions
     if not games:
+        if realtime_schedules and realtime_schedules.get(sport):
+            print(f"[sports_analytics] No historical data for {sport}, but found {len(realtime_schedules[sport])} real-time games - generating fallback predictions", flush=True)
+            # Convert real-time schedules to GameRecord format for fallback
+            from analytics.sports_data_manager import GameRecord
+            realtime_games = []
+            for game_data in realtime_schedules[sport]:
+                try:
+                    scheduled = game_data.get("scheduled", datetime.now(UTC).isoformat())
+                    realtime_games.append(GameRecord(
+                        game_id=game_data.get("id", f"{sport}_{len(realtime_games)}"),
+                        home_team=game_data.get("home_team", "Home"),
+                        away_team=game_data.get("away_team", "Away"),
+                        scheduled=scheduled,
+                        home_score=None,
+                        away_score=None,
+                    ))
+                except Exception as e:
+                    print(f"[sports_analytics] Error converting real-time game: {e}", flush=True)
+                    continue
+            if realtime_games:
+                return fallback_predictions(realtime_games, sport)
         return fallback_predictions([], sport)
 
     builder = FeatureBuilder(sport, games, odds)
@@ -1777,6 +1802,26 @@ def process_sport(sport: str) -> dict[str, Any]:
         print(f"[{sport}] Saved Elo ratings", flush=True)
 
     if len(X) < 20:
+        # If insufficient training data but we have real-time schedules, use fallback
+        if realtime_schedules and realtime_schedules.get(sport):
+            print(f"[sports_analytics] Insufficient training data ({len(X)} samples), using real-time schedules for fallback predictions", flush=True)
+            from analytics.sports_data_manager import GameRecord
+            realtime_games = []
+            for game_data in realtime_schedules[sport]:
+                try:
+                    scheduled = game_data.get("scheduled", datetime.now(UTC).isoformat())
+                    realtime_games.append(GameRecord(
+                        game_id=game_data.get("id", f"{sport}_{len(realtime_games)}"),
+                        home_team=game_data.get("home_team", "Home"),
+                        away_team=game_data.get("away_team", "Away"),
+                        scheduled=scheduled,
+                        home_score=None,
+                        away_score=None,
+                    ))
+                except Exception:
+                    continue
+            if realtime_games:
+                return fallback_predictions(realtime_games, sport)
         return fallback_predictions(games, sport)
 
     default_bundle, _, default_metrics = train_ensemble(X, y, metadata, sequence_vectors, sport)
@@ -1845,7 +1890,9 @@ def process_sport(sport: str) -> dict[str, Any]:
         edge = prob_home - implied
         recommended_side = game.home_team if edge >= 0 else game.away_team
         confidence = max(prob_home, prob_away)
-        if confidence < CONFIDENCE_THRESHOLD:
+        # Lower threshold for real-time-only mode (no historical data available)
+        effective_threshold = 0.5 if realtime_only_mode else CONFIDENCE_THRESHOLD
+        if confidence < effective_threshold:
             continue
         line_movement_value = meta.get("line_movement")
         if line_movement_value is None:
