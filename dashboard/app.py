@@ -126,7 +126,7 @@ def _load_allocation_groups() -> dict[str, dict[str, Any]]:
 
 def _fetch_panel_prices(symbols: list[str]) -> dict[str, Optional[float]]:
     """Fetch latest prices for requested symbols via yfinance."""
-    prices: dict[str, float | None] = dict.fromkeys(symbols)
+    prices: dict[str, Optional[float]] = dict.fromkeys(symbols)
     if not symbols:
         return prices
     try:
