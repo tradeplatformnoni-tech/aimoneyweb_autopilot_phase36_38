@@ -20,7 +20,13 @@ import traceback
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+# Python 3.9 compatibility: UTC is not available, use timezone.utc
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
@@ -1852,29 +1858,65 @@ def main() -> None:
         f"[sports_analytics] Starting sports analytics ensemble (history={YEARS_OF_HISTORY}y, threshold={CONFIDENCE_THRESHOLD:.2f})",
         flush=True,
     )
+    
+    # Quick startup validation
+    try:
+        print("[sports_analytics] Validating dependencies...", flush=True)
+        if not HAS_PANDAS:
+            raise ImportError("pandas is required but not installed")
+        if not HAS_NUMPY:
+            raise ImportError("numpy is required but not installed")
+        if not HAS_SKLEARN:
+            raise ImportError("scikit-learn is required but not installed")
+        print("[sports_analytics] ✅ Dependencies validated", flush=True)
+    except Exception as e:
+        print(f"[sports_analytics] ❌ Startup validation failed: {e}", flush=True)
+        sys.exit(1)
+
+    # Initial delay to let other agents start first
+    print("[sports_analytics] Waiting 10 seconds for system initialization...", flush=True)
+    time.sleep(10)
+
+    consecutive_errors = 0
+    max_consecutive_errors = 3
 
     while True:
         try:
             for sport in SPORTS:
                 print(f"[sports_analytics] Processing {sport.upper()}...", flush=True)
-                payload = process_sport(sport)
-                persist_summary(sport, payload)
-                summary = payload.get("model", {}).get("metadata") or []
-                accuracy = summary[0]["accuracy"] if summary else "n/a"
-                print(
-                    f"[sports_analytics] ✅ {sport.upper()} predictions ready • edges={len(payload.get('predictions', []))} • top acc={accuracy}",
-                    flush=True,
-                )
-                time.sleep(2)
+                try:
+                    payload = process_sport(sport)
+                    persist_summary(sport, payload)
+                    summary = payload.get("model", {}).get("metadata") or []
+                    accuracy = summary[0]["accuracy"] if summary else "n/a"
+                    print(
+                        f"[sports_analytics] ✅ {sport.upper()} predictions ready • edges={len(payload.get('predictions', []))} • top acc={accuracy}",
+                        flush=True,
+                    )
+                    consecutive_errors = 0  # Reset on success
+                    time.sleep(2)
+                except Exception as sport_error:
+                    print(f"[sports_analytics] ⚠️ Error processing {sport}: {sport_error}", flush=True)
+                    consecutive_errors += 1
+                    if consecutive_errors >= max_consecutive_errors:
+                        print(f"[sports_analytics] ❌ Too many consecutive errors ({consecutive_errors}), exiting", flush=True)
+                        sys.exit(1)
+                    time.sleep(30)  # Short delay before retry
+                    continue
 
             print("[sports_analytics] Sleeping 30 minutes before next sweep", flush=True)
+            consecutive_errors = 0  # Reset on successful sweep
             time.sleep(1800)
         except KeyboardInterrupt:
             print("[sports_analytics] Interrupted by user", flush=True)
             break
         except Exception as exc:
+            consecutive_errors += 1
             print(f"[sports_analytics] Error: {exc}", flush=True)
             traceback.print_exc()
+            if consecutive_errors >= max_consecutive_errors:
+                print(f"[sports_analytics] ❌ Too many consecutive errors ({consecutive_errors}), exiting", flush=True)
+                sys.exit(1)
             time.sleep(300)
 
 
