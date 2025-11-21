@@ -10,9 +10,12 @@ import os
 import sys
 import time
 import traceback
-from datetime import UTC, datetime
+from datetime import timezone, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional, Dict, List
+
+# Python 3.9 compatibility
+UTC = timezone.utc
 
 try:
     import requests
@@ -45,6 +48,15 @@ TIKTOK_SHOP_API_KEY = os.getenv("TIKTOK_SHOP_API_KEY", "")
 TIKTOK_SHOP_ACCESS_TOKEN = os.getenv("TIKTOK_SHOP_ACCESS_TOKEN", "")
 TIKTOK_SHOP_SECRET = os.getenv("TIKTOK_SHOP_SECRET", "")
 
+# AutoDS API credentials (for eBay integration if needed)
+AUTODS_API_KEY = os.getenv("AUTODS_API_KEY", "")
+AUTODS_AUTH = os.getenv("AUTODS_AUTH", "")
+
+# Shopify credentials (if using Shopify)
+SHOPIFY_API_KEY = os.getenv("SHOPIFY_API_KEY", "")
+SHOPIFY_PASSWORD = os.getenv("SHOPIFY_PASSWORD", "")
+SHOPIFY_STORE = os.getenv("SHOPIFY_STORE", "")
+
 # Supported platforms (free platforms only - skipping Shopify/AutoDS)
 SUPPORTED_PLATFORMS = ["etsy", "mercari", "poshmark", "tiktok_shop"]
 ACTIVE_PLATFORMS = (
@@ -61,11 +73,17 @@ try:
         test_autods_connection,
     )
 
-    AUTODS_AVAILABLE = bool(AUTODS_AUTH)
+    AUTODS_AVAILABLE = bool(AUTODS_API_KEY or AUTODS_AUTH)
 except ImportError:
     AUTODS_AVAILABLE = False
     print(
         "[dropship_agent] ⚠️ AutoDS integration not available (autods_integration.py missing)",
+        flush=True,
+    )
+except Exception as e:
+    AUTODS_AVAILABLE = False
+    print(
+        f"[dropship_agent] ⚠️ AutoDS integration error: {e}",
         flush=True,
     )
 
@@ -80,7 +98,7 @@ except ImportError:
         "[dropship_agent] ⚠️ VERO protection not available (vero_protection.py missing)", flush=True
     )
 
-    def sanitize_product_for_ebay(product: dict[str, Any]) -> dict[str, Any]:
+    def sanitize_product_for_ebay(product: Dict[str, Any]) -> Dict[str, Any]:
         return product
 
 
@@ -104,12 +122,12 @@ try:
 except ImportError:
 
     def update_agent_revenue(
-        agent_name: str, revenue: float, cost: float = 0.0, metadata: dict | None = None
+        agent_name: str, revenue: float, cost: float = 0.0, metadata: Optional[dict] = None
     ):
         pass
 
 
-def load_trending_products() -> list[dict[str, Any]]:
+def load_trending_products() -> List[Dict[str, Any]]:
     """Load trending products from knowledge integrator."""
     trending_file = STATE / "trending_products.json"
     if trending_file.exists():
@@ -120,7 +138,7 @@ def load_trending_products() -> list[dict[str, Any]]:
     return []
 
 
-def find_cheap_supplier(product_name: str, keywords: list[str]) -> dict[str, Any] | None:
+def find_cheap_supplier(product_name: str, keywords: List[str]) -> Optional[Dict[str, Any]]:
     """
     Find cheapest supplier for product (AliExpress, Alibaba, Temu via AutoDS).
     Uses AutoDS API to search suppliers safely.
@@ -169,7 +187,7 @@ def find_cheap_supplier(product_name: str, keywords: list[str]) -> dict[str, Any
     }
 
 
-def calculate_markup(cost: float, min_margin_pct: float = 30.0) -> dict[str, float]:
+def calculate_markup(cost: float, min_margin_pct: float = 30.0) -> Dict[str, float]:
     """Calculate selling price with markup."""
     # Target 30% minimum margin
     selling_price = cost * (1 + min_margin_pct / 100)
@@ -193,7 +211,7 @@ def calculate_markup(cost: float, min_margin_pct: float = 30.0) -> dict[str, flo
     }
 
 
-def list_product_on_ebay(product_data: dict[str, Any], pricing: dict[str, float]) -> str | None:
+def list_product_on_ebay(product_data: Dict[str, Any], pricing: Dict[str, float]) -> Optional[str]:
     """
     List product on eBay via AutoDS API (SAFE - uses middleware).
     Includes COMPREHENSIVE policy compliance to prevent account suspension.
@@ -360,7 +378,7 @@ def list_product_on_ebay(product_data: dict[str, Any], pricing: dict[str, float]
         return None
 
 
-def list_product_on_etsy(product_data: dict[str, Any], pricing: dict[str, float]) -> str | None:
+def list_product_on_etsy(product_data: Dict[str, Any], pricing: Dict[str, float]) -> Optional[str]:
     """
     List product on Etsy via API.
     Requires Etsy API credentials (free seller account).
@@ -412,7 +430,7 @@ def list_product_on_etsy(product_data: dict[str, Any], pricing: dict[str, float]
         return None
 
 
-def list_product_on_mercari(product_data: dict[str, Any], pricing: dict[str, float]) -> str | None:
+def list_product_on_mercari(product_data: Dict[str, Any], pricing: Dict[str, float]) -> Optional[str]:
     """
     List product on Mercari via API.
     Note: Mercari doesn't have a public API, so this would require web automation or private API access.
@@ -439,7 +457,7 @@ def list_product_on_mercari(product_data: dict[str, Any], pricing: dict[str, flo
         return None
 
 
-def list_product_on_poshmark(product_data: dict[str, Any], pricing: dict[str, float]) -> str | None:
+def list_product_on_poshmark(product_data: Dict[str, Any], pricing: Dict[str, float]) -> Optional[str]:
     """
     List product on Poshmark via API.
     Note: Poshmark doesn't have a public API - requires web automation or private API.
@@ -462,8 +480,8 @@ def list_product_on_poshmark(product_data: dict[str, Any], pricing: dict[str, fl
 
 
 def list_product_on_tiktok_shop(
-    product_data: dict[str, Any], pricing: dict[str, float]
-) -> str | None:
+    product_data: Dict[str, Any], pricing: Dict[str, float]
+) -> Optional[str]:
     """
     List product on TikTok Shop via API.
     TikTok Shop has an official API for sellers.
@@ -521,7 +539,7 @@ def list_product_on_tiktok_shop(
         return None
 
 
-def list_product_on_shopify(product_data: dict[str, Any], pricing: dict[str, float]) -> bool:
+def list_product_on_shopify(product_data: Dict[str, Any], pricing: Dict[str, float]) -> bool:
     """List product on Shopify via API."""
     if not (SHOPIFY_API_KEY and SHOPIFY_PASSWORD and SHOPIFY_STORE):
         print("[dropship_agent] Shopify credentials missing - cannot list product", flush=True)
@@ -583,7 +601,7 @@ def auto_fulfill_order(order_id: str, customer_address: dict[str, str]) -> bool:
     return True
 
 
-def monitor_orders() -> list[dict[str, Any]]:
+def monitor_orders() -> List[Dict[str, Any]]:
     """
     Monitor for new orders from eBay (via AutoDS) or Shopify.
     Returns list of orders with platform info.
@@ -613,8 +631,8 @@ def monitor_orders() -> list[dict[str, Any]]:
 
 
 def list_product_multi_platform(
-    product_data: dict[str, Any], pricing: dict[str, float]
-) -> dict[str, str | None]:
+    product_data: Dict[str, Any], pricing: Dict[str, float]
+) -> Dict[str, Optional[str]]:
     """
     List product on multiple platforms simultaneously.
     Returns dictionary of platform -> listing_id.
@@ -650,6 +668,14 @@ def main():
         f"[dropship_agent] Starting multi-platform dropshipping agent @ {datetime.now(UTC).isoformat()}Z",
         flush=True,
     )
+
+    # Ensure directories exist
+    try:
+        STATE.mkdir(parents=True, exist_ok=True)
+        RUNTIME.mkdir(parents=True, exist_ok=True)
+        LOGS.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        print(f"[dropship_agent] ⚠️ Warning: Could not create directories: {e}", flush=True)
 
     # Filter active platforms
     active_platforms = [
