@@ -25,8 +25,12 @@ STATE = ROOT / "state"
 RUNTIME = ROOT / "runtime"
 LOGS = ROOT / "logs"
 
+# Create directories if they don't exist (silently fail if permissions issue)
 for d in [STATE, RUNTIME, LOGS]:
-    d.mkdir(parents=True, exist_ok=True)
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except (PermissionError, OSError):
+        pass  # Directory creation may fail on Render, but that's OK
 
 
 def get_agent_status() -> dict[str, Any]:
