@@ -3598,8 +3598,34 @@ def main():
                                 state=state,
                             )
                     else:
-                        # Fallback to legacy quote fetching (if QuoteService unavailable)
-                        quote = broker.fetch_quote(test_symbol)
+                        # Fallback: Try to use quote_service if available, otherwise use broker.fetch_quote()
+                        quote = None
+                        
+                        # First, try to re-initialize quote_service if it's None but available
+                        if not quote_service and HAS_QUOTE_SERVICE:
+                            try:
+                                quote_service = get_quote_service()
+                                logger.info("✅ Re-initialized QuoteService for TEST_MODE fallback")
+                            except Exception as e:
+                                logger.warning(f"⚠️ Failed to re-initialize QuoteService: {e}")
+                        
+                        # Try quote_service first (if available)
+                        if quote_service:
+                            try:
+                                validated_quote = quote_service.get_quote(test_symbol, max_age=10)
+                                if validated_quote:
+                                    quote = validated_quote.to_dict()
+                                    logger.debug(f"📊 {test_symbol} Quote ({validated_quote.source}): {validated_quote.last_price:.2f}")
+                            except Exception as e:
+                                logger.warning(f"⚠️ QuoteService failed for {test_symbol}: {e}")
+                        
+                        # If quote_service didn't work, try broker.fetch_quote() as fallback
+                        if not quote:
+                            logger.debug(f"⚠️ QuoteService unavailable or failed, trying broker.fetch_quote() for {test_symbol}")
+                            quote = broker.fetch_quote(test_symbol)
+                            if quote:
+                                logger.debug(f"📊 {test_symbol} Quote (broker fallback): {quote.get('mid', quote.get('last', 'N/A'))}")
+                        
                         if not quote:
                             logger.warning(
                                 f"⚠️ Could not fetch quote for test trade ({test_symbol}), skipping"
