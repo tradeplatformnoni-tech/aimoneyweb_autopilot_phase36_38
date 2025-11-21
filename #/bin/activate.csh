@@ -12,7 +12,7 @@ deactivate nondestructive
 setenv VIRTUAL_ENV '/Users/oluwaseyeakinbola/neolight/#'
 
 set _OLD_VIRTUAL_PATH="$PATH"
-setenv PATH "$VIRTUAL_ENV/"bin":$PATH"
+setenv PATH "$VIRTUAL_ENV/bin:$PATH"
 
 
 set _OLD_VIRTUAL_PROMPT="$prompt"

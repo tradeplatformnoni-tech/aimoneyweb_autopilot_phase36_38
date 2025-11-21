@@ -1749,7 +1749,8 @@ def process_sport(sport: str) -> dict[str, Any]:
     games = load_game_history(sport, seasons)
     odds = load_odds_history(sport, seasons)
 
-    # EINSTEIN-LEVEL FIX: Fetch real-time schedules for today
+    # EINSTEIN-LEVEL FIX: Fetch real-time schedules for today using FREE sources
+    realtime_schedules = None
     try:
         from agents.sports_realtime_schedule import fetch_realtime_schedules
 
@@ -1760,10 +1761,37 @@ def process_sport(sport: str) -> dict[str, Any]:
         )
     except Exception as e:
         print(
-            f"[sports_analytics] ⚠️ Real-time schedule fetch failed: {e}, using historical data",
+            f"[sports_analytics] ⚠️ Real-time schedule fetch failed: {e}, trying free sources",
             flush=True,
         )
         realtime_schedules = None
+    
+    # ZERO-COST SOLUTION: Use free sports data sources (ESPN, API-Football, TheSportsDB)
+    if not realtime_schedules or not realtime_schedules.get(sport):
+        try:
+            from analytics.free_sports_data import get_free_sports_schedule
+            
+            free_predictions = get_free_sports_schedule(sport)
+            if free_predictions:
+                print(
+                    f"[sports_analytics] ✅ Found {len(free_predictions)} games from free sources (ESPN/API-Football/TheSportsDB)",
+                    flush=True,
+                )
+                # Convert to expected format and return immediately
+                result = {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "sport": sport,
+                    "model": {"type": "free_statistical"},
+                    "predictions": free_predictions,
+                    "source": "free_apis"
+                }
+                persist_summary(sport, result)
+                return result
+        except Exception as e:
+            print(
+                f"[sports_analytics] ⚠️ Free sports data fetch failed: {e}, using existing data",
+                flush=True,
+            )
 
     # Track if we're in real-time-only mode (no historical data)
     realtime_only_mode = not games and realtime_schedules and realtime_schedules.get(sport)
