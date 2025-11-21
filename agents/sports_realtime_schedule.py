@@ -15,7 +15,10 @@ from __future__ import annotations
 import json
 import os
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import timezone, datetime, timedelta
+
+# Python 3.9 compatibility
+UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
