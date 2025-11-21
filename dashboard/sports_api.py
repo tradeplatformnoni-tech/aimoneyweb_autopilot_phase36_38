@@ -361,9 +361,9 @@ async def get_clv_summary() -> dict[str, Any]:
 @router.get("/clv/trades")
 async def get_clv_trades(
     limit: int = 250,
-    sport: str | None = None,
-    steam: str | None = None,
-    regime: str | None = None,
+    sport: Optional[str] = None,
+    steam: Optional[str] = None,
+    regime: Optional[str] = None,
 ) -> dict[str, Any]:
     """Return individual CLV trade records with optional filters."""
     payload = _load_clv_payload()
