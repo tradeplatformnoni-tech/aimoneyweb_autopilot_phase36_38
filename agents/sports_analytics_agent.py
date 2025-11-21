@@ -1900,28 +1900,31 @@ def main() -> None:
         flush=True,
     )
     
-    # Quick startup validation
+    # Quick startup validation - GRACEFUL DEGRADATION (no sys.exit)
     try:
         print("[sports_analytics] Validating dependencies...", flush=True)
         if not HAS_PANDAS:
-            raise ImportError("pandas is required but not installed")
+            print("[sports_analytics] ⚠️ pandas not available - using fallback mode", flush=True)
         if not HAS_NUMPY:
-            raise ImportError("numpy is required but not installed")
+            print("[sports_analytics] ⚠️ numpy not available - using fallback mode", flush=True)
         if not HAS_SKLEARN:
-            raise ImportError("scikit-learn is required but not installed")
-        print("[sports_analytics] ✅ Dependencies validated", flush=True)
+            print("[sports_analytics] ⚠️ scikit-learn not available - using fallback mode", flush=True)
+        if HAS_PANDAS and HAS_NUMPY and HAS_SKLEARN:
+            print("[sports_analytics] ✅ Dependencies validated", flush=True)
+        else:
+            print("[sports_analytics] ⚠️ Some dependencies missing - continuing with degraded functionality", flush=True)
     except Exception as e:
-        print(f"[sports_analytics] ❌ Startup validation failed: {e}", flush=True)
+        print(f"[sports_analytics] ⚠️ Startup validation error: {e} - continuing with fallback", flush=True)
         import traceback
         traceback.print_exc()
-        sys.exit(1)
+        # DON'T EXIT - continue with degraded functionality
 
     # Initial delay to let other agents start first
     print("[sports_analytics] Waiting 10 seconds for system initialization...", flush=True)
     time.sleep(10)
 
     consecutive_errors = 0
-    max_consecutive_errors = 3
+    max_consecutive_errors = 10  # Increased from 3 to allow more recovery attempts
 
     while True:
         try:
@@ -1940,10 +1943,16 @@ def main() -> None:
                     time.sleep(2)
                 except Exception as sport_error:
                     print(f"[sports_analytics] ⚠️ Error processing {sport}: {sport_error}", flush=True)
+                    import traceback
+                    traceback.print_exc()
                     consecutive_errors += 1
                     if consecutive_errors >= max_consecutive_errors:
-                        print(f"[sports_analytics] ❌ Too many consecutive errors ({consecutive_errors}), exiting", flush=True)
-                        sys.exit(1)
+                        print(f"[sports_analytics] ❌ Too many consecutive errors ({consecutive_errors})", flush=True)
+                        print(f"[sports_analytics] ⏳ Entering cooldown period (60s) - will retry after", flush=True)
+                        # DON'T EXIT - enter cooldown and retry
+                        consecutive_errors = 0  # Reset for next attempt
+                        time.sleep(60)  # Cooldown period
+                        continue
                     time.sleep(30)  # Short delay before retry
                     continue
 
