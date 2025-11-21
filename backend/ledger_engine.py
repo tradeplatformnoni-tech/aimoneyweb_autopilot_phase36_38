@@ -516,17 +516,43 @@ def record_fill(symbol: str, side: str, qty: float, price: float, fee: float, no
     wealth[day] = {"equity": equity, "cash": cash, "mdd_pct": mdd, "rolling_sharpe": sharpe}
     write_json(WEALTH_JSON, wealth)
     # Risk alert example - only send if drawdown is reasonable (capped at 100%)
-    # FIX: Suppress alerts for invalid drawdown calculations (>100% means calculation error)
-    if 10.0 <= mdd <= 100.0:
-        _send_telegram(f"⚠️ NeoLight Drawdown Alert: {mdd:.1f}%")
-    elif mdd > 100.0:
-        # If drawdown exceeds 100%, there's a calculation error - log but DON'T send alert
+    # FIX: Enhanced alert logic with validation (Claude 4.5 solution)
+    trading_mode = os.getenv("TRADING_MODE", "PAPER_TRADING_MODE")
+    
+    # Validate drawdown before alerting
+    if mdd > 100.0:
+        # Calculation error - don't alert
         import logging
-
         logging.warning(
-            f"⚠️ Invalid drawdown calculated: {mdd:.1f}% - suppressing alert (likely data issue)"
+            f"⚠️ Invalid drawdown calculated: {mdd:.1f}% - suppressing alert (data issue)"
         )
-        # Don't send Telegram alert for calculation errors - it's confusing
+    elif mdd > 50.0:
+        # High drawdown - validate before alerting
+        import logging
+        logging.warning(f"⚠️ High drawdown detected: {mdd:.1f}%")
+        logging.warning(f"   Equity: ${equity:,.2f}, Cash: ${cash:,.2f}")
+        position_value = equity - cash
+        logging.warning(f"   Position Value: ${position_value:,.2f}")
+        
+        # Calculate position percentage
+        if equity > 0:
+            position_pct = (position_value / equity) * 100
+            logging.warning(f"   Position %: {position_pct:.1f}%")
+            
+            # If most equity is in positions, drawdown might be real
+            # Send alert with context
+            if 10.0 <= mdd <= 100.0:
+                alert_msg = (
+                    f"⚠️ NeoLight Drawdown Alert: {mdd:.1f}%\n"
+                    f"Mode: {trading_mode}\n"
+                    f"Equity: ${equity:,.2f}\n"
+                    f"Cash: ${cash:,.2f}\n"
+                    f"Positions: ${position_value:,.2f} ({position_pct:.1f}%)"
+                )
+                _send_telegram(alert_msg)
+    elif 10.0 <= mdd <= 50.0:
+        # Reasonable drawdown - send simple alert
+        _send_telegram(f"⚠️ NeoLight Drawdown Alert: {mdd:.1f}% ({trading_mode})")
 
 
 def snapshot():
