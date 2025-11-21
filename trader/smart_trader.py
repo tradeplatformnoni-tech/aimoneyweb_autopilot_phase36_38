@@ -3476,80 +3476,156 @@ def main():
                         crypto_symbols[0] if crypto_symbols else SYMBOLS[0]
                     )  # Use first crypto or first symbol
 
-                    # --- World-Class Atomic Trade Execution ---
-                    if quote_service:
+                    logger.info("=" * 80)
+                    logger.info(f"🧪 TEST_MODE: Executing test trade for {test_symbol}")
+                    logger.info("=" * 80)
+
+                    # ========================================================================
+                    # FIX #1: Check quote_service exists with detailed logging
+                    # ========================================================================
+
+                    if quote_service is None:
+                        logger.error("❌ CRITICAL: quote_service is None!")
+                        logger.error("   quote_service failed to initialize at startup")
+                        logger.error("   Check startup logs for initialization errors")
+                        logger.error("   Verify trader/quote_service.py exists")
+                        logger.error("   Verify HAS_QUOTE_SERVICE is True")
+
+                        # Mark as executed to prevent infinite retries
+                        state["test_trade_executed"] = True
+                        continue  # Skip to next loop iteration
+
+                    logger.info(f"✅ quote_service available: {type(quote_service).__name__}")
+
+                    # ========================================================================
+                    # FIX #2: Use SAME method as PAPER_TRADING_MODE (proven to work)
+                    # Remove atomic_trade_context() - it was throwing exceptions
+                    # ========================================================================
+
+                    try:
+                        logger.info(f"📊 Fetching quote for {test_symbol}...")
+
+                        # Use direct quote fetch (same as PAPER_TRADING_MODE at line 2381)
+                        # Changed from max_age=10 (too strict) to max_age=60 (same as PAPER_TRADING_MODE)
+                        validated_quote = quote_service.get_quote(test_symbol, max_age=60)
+                        if validated_quote is None:
+                            # Detailed error logging for troubleshooting
+                            logger.error(f"❌ quote_service.get_quote() returned None for {test_symbol}")
+                            logger.error("")
+                            logger.error("   ALL quote sources failed:")
+                            logger.error("   1. Alpaca API")
+                            logger.error("   2. Finnhub")
+                            logger.error("   3. TwelveData")
+                            logger.error("   4. AlphaVantage")
+                            logger.error("   5. Yahoo Finance")
+                            logger.error("")
+                            logger.error("   Possible causes:")
+                            logger.error("   - API keys not set: Check ALPACA_API_KEY, FINNHUB_API_KEY, etc.")
+                            logger.error("   - Rate limits hit: Wait and retry")
+                            logger.error("   - Network issues: Check Render connectivity")
+                            logger.error("   - Symbol format: BTC-USD might not be recognized")
+                            logger.error("")
+                            logger.error("   Environment variables:")
+                            logger.error(f"     ALPACA_API_KEY: {'SET' if os.getenv('ALPACA_API_KEY') else 'NOT SET'}")
+                            logger.error(f"     NEOLIGHT_USE_ALPACA_QUOTES: {os.getenv('NEOLIGHT_USE_ALPACA_QUOTES')}")
+
+                            # Mark as executed
+                            state["test_trade_executed"] = True
+                            continue
+
+                        # ====================================================================
+                        # SUCCESS: Quote fetched
+                        # ====================================================================
+
+                        logger.info(f"✅ Quote fetched successfully:")
+                        logger.info(f"   Symbol: {test_symbol}")
+                        logger.info(f"   Price: ${validated_quote.last_price:,.2f}")
+                        logger.info(f"   Source: {validated_quote.source}")
+                        logger.info(f"   Age: {validated_quote.age_seconds:.1f}s")
+                        logger.info(f"   Spread: {validated_quote.spread_percent:.3f}%")
+
+                        # Convert to float safely
+                        raw_price = validated_quote.last_price
+                        if isinstance(raw_price, (int, float)):
+                            test_price = float(raw_price)
+                        else:
+                            # Handle Decimal or string edge cases
+                            test_price = safe_float_convert(
+                                raw_price,
+                                symbol=test_symbol,
+                                context="quote last_price",
+                                state=state,
+                            )
+                            if test_price is None:
+                                error_msg = f"Invalid price from quote: {raw_price} ({type(raw_price)})"
+                                logger.error(f"❌ {error_msg}")
+                                raise ValueError(error_msg)
+
+                        # CRITICAL: Verify price is actually a float before using
+                        if not isinstance(test_price, (int, float)) or test_price <= 0:
+                            error_msg = f"Invalid price type after conversion: {test_price} ({type(test_price)})"
+                            logger.error(f"❌ {error_msg}")
+                            raise ValueError(error_msg)
+
+                        logger.info(
+                            f"🧪 Using quote: {test_symbol} @ ${test_price:,.2f} (source={validated_quote.source}, type={type(test_price).__name__})"
+                        )
+
+                        # Small test trade: 0.001 BTC or equivalent
+                        if test_symbol == "BTC-USD":
+                            test_qty = 0.001
+                        elif test_symbol == "ETH-USD":
+                            test_qty = 0.01  # ETH equivalent
+                        else:
+                            test_qty = max(
+                                0.001, 10.0 / test_price
+                            )  # $10 worth, minimum 0.001
+
+                        # CRITICAL: Log exactly what we're passing to submit_order
+                        logger.info(
+                            f"🔍 About to call submit_order: symbol={test_symbol}, qty={test_qty} (type={type(test_qty).__name__}), price={test_price} (type={type(test_price).__name__})"
+                        )
+
                         try:
-                            with atomic_trade_context(
-                                quote_service, test_symbol, max_age=10
-                            ) as validated_quote:
-                                # validated_quote.last_price is GUARANTEED to be a valid float
-                                # CRITICAL: Convert to float explicitly (handles Decimal, string, etc.)
-                                raw_price = validated_quote.last_price
+                            result = broker.submit_order(
+                                test_symbol, "buy", test_qty, test_price
+                            )
+                            trade_breaker.record_success()  # Successful trade
+                            state["last_trade"][test_symbol] = time.time()
+                            state["trade_count"] += 1
+                            state["test_trade_executed"] = True
 
-                                # Convert to float safely (handles Decimal, string edge cases)
-                                if isinstance(raw_price, (int, float)):
-                                    test_price = float(raw_price)
-                                else:
-                                    # Handle Decimal or string edge cases
-                                    test_price = safe_float_convert(
-                                        raw_price,
-                                        symbol=test_symbol,
-                                        context="atomic quote last_price",
-                                        state=state,
-                                    )
-                                    if test_price is None:
-                                        error_msg = f"Invalid price from atomic quote: {raw_price} ({type(raw_price)})"
-                                        logger.error(f"❌ {error_msg}")
-                                        raise ValueError(error_msg)
+                            # Log successful test trade
+                            logger.info("=" * 80)
+                            logger.info("✅ TEST TRADE EXECUTED SUCCESSFULLY")
+                            logger.info("=" * 80)
+                            logger.info(f"   Symbol: {test_symbol}")
+                            logger.info(f"   Side: BUY")
+                            logger.info(f"   Price: ${test_price:,.2f}")
+                            logger.info(f"   Quantity: {test_qty:.4f}")
+                            logger.info(f"   Source: {validated_quote.source}")
+                            logger.info(f"   Mode: TEST")
+                            logger.info("=" * 80)
 
-                                # CRITICAL: Verify price is actually a float before using
-                                if not isinstance(test_price, (int, float)) or test_price <= 0:
-                                    error_msg = f"Invalid price type after conversion: {test_price} ({type(test_price)})"
-                                    logger.error(f"❌ {error_msg}")
-                                    raise ValueError(error_msg)
-
-                                logger.info(
-                                    f"🧪 Using atomic quote: {test_symbol} @ ${test_price:,.2f} (seq={validated_quote.sequence_id}, type={type(test_price).__name__})"
-                                )
-
-                                # Small test trade: 0.001 BTC or equivalent
-                                if test_symbol == "BTC-USD":
-                                    test_qty = 0.001
-                                elif test_symbol == "ETH-USD":
-                                    test_qty = 0.01  # ETH equivalent
-                                else:
-                                    test_qty = max(
-                                        0.001, 10.0 / test_price
-                                    )  # $10 worth, minimum 0.001
-
-                                # CRITICAL: Log exactly what we're passing to submit_order
-                                logger.info(
-                                    f"🔍 About to call submit_order: symbol={test_symbol}, qty={test_qty} (type={type(test_qty).__name__}), price={test_price} (type={type(test_price).__name__})"
-                                )
-
-                                try:
-                                    result = broker.submit_order(
-                                        test_symbol, "buy", test_qty, test_price
-                                    )
-                                    trade_breaker.record_success()  # Successful trade
-                                    state["last_trade"][test_symbol] = time.time()
-                                    state["trade_count"] += 1
-                                    state["test_trade_executed"] = True
-                                    print(
-                                        f"🧪 TEST TRADE: BUY {test_symbol}: {test_qty:.4f} @ ${test_price:.2f} | Fee: ${result.get('fee', 0):.2f}",
-                                        flush=True,
-                                    )
-                                    print(
-                                        f"💥 Executed TEST BUY: {test_symbol} @ ${test_price:,.2f} | Size: {test_qty:.4f}",
-                                        flush=True,
-                                    )
-                                    send_telegram(
-                                        f"🧪 TEST TRADE: BUY {test_symbol}\n"
-                                        f"📊 Size: {test_qty:.4f} @ ${test_price:.2f}\n"
-                                        f"📈 Quote seq: {validated_quote.sequence_id}",
-                                        include_mode=True,
-                                        state=state,
-                                    )
+                            print(
+                                f"🧪 TEST TRADE: BUY {test_symbol}: {test_qty:.4f} @ ${test_price:.2f} | Fee: ${result.get('fee', 0):.2f}",
+                                flush=True,
+                            )
+                            print(
+                                f"💥 Executed TEST BUY: {test_symbol} @ ${test_price:,.2f} | Size: {test_qty:.4f}",
+                                flush=True,
+                            )
+                            send_telegram(
+                                f"✅ TEST TRADE EXECUTED\n"
+                                f"Symbol: {test_symbol}\n"
+                                f"Side: BUY\n"
+                                f"Price: ${test_price:,.2f}\n"
+                                f"Quantity: {test_qty:.4f}\n"
+                                f"Source: {validated_quote.source}\n"
+                                f"Mode: TEST",
+                                include_mode=True,
+                                state=state,
+                            )
 
                                     # Send to Atlas Bridge
                                     send_to_atlas_bridge(
