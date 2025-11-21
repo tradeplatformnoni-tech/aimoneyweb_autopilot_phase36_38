@@ -2,14 +2,14 @@
 """Get sample basketball and soccer games for demonstration."""
 
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
 
 ROOT = Path(__file__).parent.parent
 STATE = ROOT / "state"
 STATE.mkdir(parents=True, exist_ok=True)
 
-TODAY = datetime.now(timezone.utc)
+TODAY = datetime.now(UTC)
 TOMORROW = TODAY + timedelta(days=1)
 
 # Sample NBA games (typical schedule)
@@ -105,17 +105,11 @@ output_file.write_text(json.dumps(payload, indent=2))
 print(f"✅ Created {len(all_games)} sample games")
 print(f"   NBA: {len(nba_games)}")
 print(f"   Soccer: {len(soccer_games)}")
-print(f"")
+print("")
 print("Sample games:")
 for i, game in enumerate(all_games[:5], 1):
     scheduled = game.get("scheduled", "TBD")
     time_part = scheduled.split("T")[1][:5] if "T" in scheduled else scheduled[:16]
-    print(f"   {i}. {game['sport'].upper()}: {game['away_team']} @ {game['home_team']} - {time_part}")
-
-
-
-
-
-
-
-
+    print(
+        f"   {i}. {game['sport'].upper()}: {game['away_team']} @ {game['home_team']} - {time_part}"
+    )
