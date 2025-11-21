@@ -3627,46 +3627,46 @@ def main():
                                 state=state,
                             )
 
-                                    # Send to Atlas Bridge
-                                    send_to_atlas_bridge(
-                                        {
-                                            "type": "test_trade",
-                                            "symbol": test_symbol,
-                                            "side": "buy",
-                                            "qty": test_qty,
-                                            "price": test_price,
-                                            "quote_sequence": validated_quote.sequence_id,
-                                            "mode": trading_mode,
-                                            "timestamp": dt.datetime.now(dt.UTC).isoformat(),
-                                        }
-                                    )
-                                except (ValueError, TypeError) as e:
-                                    trade_breaker.record_failure()
-                                    error_msg = f"Order validation error: {e}"
-                                    logger.error(
-                                        f"❌ Test trade validation error for {test_symbol}: {error_msg}"
-                                    )
-                                    print(f"❌ Test trade error: {error_msg}", flush=True)
-                                    send_telegram(
-                                        f"⚠️ Test trade skipped: {test_symbol}\n"
-                                        f"📊 Reason: {error_msg}",
-                                        include_mode=True,
-                                        state=state,
-                                    )
-                                except Exception as e:
-                                    trade_breaker.record_failure()
-                                    logger.error(
-                                        f"❌ Test trade execution error for {test_symbol}: {e}",
-                                        exc_info=True,
-                                    )
-                                    print(f"❌ Test trade error: {e}", flush=True)
-                                    send_telegram(
-                                        f"⚠️ Test trade execution error: {test_symbol}\n"
-                                        f"📊 Error: {str(e)}",
-                                        include_mode=True,
-                                        state=state,
-                                    )
-                        except ValueError as e:
+                            # Send to Atlas Bridge
+                            send_to_atlas_bridge(
+                                {
+                                    "type": "test_trade",
+                                    "symbol": test_symbol,
+                                    "side": "buy",
+                                    "qty": test_qty,
+                                    "price": test_price,
+                                    "quote_sequence": validated_quote.sequence_id,
+                                    "mode": trading_mode,
+                                    "timestamp": dt.datetime.now(dt.UTC).isoformat(),
+                                }
+                            )
+                        except (ValueError, TypeError) as e:
+                            trade_breaker.record_failure()
+                            error_msg = f"Order validation error: {e}"
+                            logger.error(
+                                f"❌ Test trade validation error for {test_symbol}: {error_msg}"
+                            )
+                            print(f"❌ Test trade error: {error_msg}", flush=True)
+                            send_telegram(
+                                f"⚠️ Test trade skipped: {test_symbol}\n"
+                                f"📊 Reason: {error_msg}",
+                                include_mode=True,
+                                state=state,
+                            )
+                        except Exception as e:
+                            trade_breaker.record_failure()
+                            logger.error(
+                                f"❌ Test trade execution error for {test_symbol}: {e}",
+                                exc_info=True,
+                            )
+                            print(f"❌ Test trade error: {e}", flush=True)
+                            send_telegram(
+                                f"⚠️ Test trade execution error: {test_symbol}\n"
+                                f"📊 Error: {str(e)}",
+                                include_mode=True,
+                                state=state,
+                            )
+                    except Exception as e:
                             logger.warning(f"⚠️ Test trade skipped: {test_symbol} - {e}")
                             send_telegram(
                                 f"⚠️ Test trade skipped: {test_symbol}\n📊 Reason: {str(e)}",
