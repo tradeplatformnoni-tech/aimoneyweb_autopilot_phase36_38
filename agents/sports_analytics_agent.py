@@ -100,23 +100,53 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     HAS_OPTUNA = False
 
-from analytics import sports_data_manager as data_mgr
-from analytics.sports_advanced_features import (
-    EloRatingSystem,
-    InjuryTracker,
-    calculate_home_advantage_score,
-)
-from analytics.sports_data_manager import (
-    GameRecord,
-    OddsRecord,
-    backfill_odds_history,
-    backfill_soccer_history,
-    backfill_sportradar_history,
-    generate_season_list,
-    load_records,
-)
+# Import analytics modules with error handling
+try:
+    from analytics import sports_data_manager as data_mgr
+    from analytics.sports_advanced_features import (
+        EloRatingSystem,
+        InjuryTracker,
+        calculate_home_advantage_score,
+    )
+    from analytics.sports_data_manager import (
+        GameRecord,
+        OddsRecord,
+        backfill_odds_history,
+        backfill_soccer_history,
+        backfill_sportradar_history,
+        generate_season_list,
+        load_records,
+    )
+    HAS_ANALYTICS = True
+except ImportError as e:
+    HAS_ANALYTICS = False
+    print(f"[sports_analytics] ❌ Failed to import analytics modules: {e}", flush=True)
+    print("[sports_analytics] ⚠️ Analytics modules may not be in render-deployment branch", flush=True)
+    # Create stub functions to prevent crashes
+    class GameRecord:
+        pass
+    class OddsRecord:
+        pass
+    def backfill_odds_history(*args, **kwargs):
+        return []
+    def backfill_soccer_history(*args, **kwargs):
+        pass
+    def backfill_sportradar_history(*args, **kwargs):
+        pass
+    def generate_season_list(*args, **kwargs):
+        return []
+    def load_records(*args, **kwargs):
+        return []
+    data_mgr = None
 
-ROOT = Path(os.path.expanduser("~/neolight"))
+# Handle both local and Render paths
+if os.getenv("RENDER_MODE") == "true":
+    # Render environment
+    ROOT = Path("/opt/render/project/src")
+else:
+    # Local environment
+    ROOT = Path(os.path.expanduser("~/neolight"))
+
 STATE = ROOT / "state"
 DATA = ROOT / "data"
 MODELS_DIR = DATA / "sports_models"
@@ -1882,6 +1912,8 @@ def main() -> None:
         print("[sports_analytics] ✅ Dependencies validated", flush=True)
     except Exception as e:
         print(f"[sports_analytics] ❌ Startup validation failed: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
     # Initial delay to let other agents start first
