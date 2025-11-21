@@ -1251,7 +1251,7 @@ def get_risk_attribution():
 
 
 @app.get("/api/events")
-def get_events(type: str | None = None):
+def get_events(type: Optional[str] = None):
     """Get event stream data."""
     try:
         from phases.phase_3900_4100_events import get_recent_events
