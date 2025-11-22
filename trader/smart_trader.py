@@ -1343,7 +1343,14 @@ def send_to_atlas_bridge(data: dict[str, Any]) -> bool:
     try:
         import requests  # type: ignore
 
-        dashboard_url = os.getenv("NEOLIGHT_DASHBOARD_URL", "http://localhost:8100")
+        # Detect Render environment - skip dashboard on Render (no localhost)
+        render_mode = os.getenv("RENDER_MODE", "false").lower() == "true"
+        dashboard_url = os.getenv(
+            "NEOLIGHT_DASHBOARD_URL", "http://localhost:8100" if not render_mode else None
+        )
+        if not dashboard_url:
+            # On Render, skip dashboard push (no localhost available)
+            return False
         response = requests.post(f"{dashboard_url}/atlas/update", json=data, timeout=5)
         return response.status_code == 200
     except Exception:
@@ -2375,22 +2382,41 @@ def main():
                         continue
 
                     # Try QuoteService first (world-class immutable quotes with multi-source fallback)
+                    # OFFLINE MODE: Use stale cache when offline (use_stale_cache=True)
                     quote = None
                     if quote_service:
                         try:
-                            validated_quote = quote_service.get_quote(sym, max_age=60)
+                            # Enable stale cache for offline mode (graceful degradation)
+                            validated_quote = quote_service.get_quote(
+                                sym, max_age=60, use_stale_cache=True
+                            )
                             if validated_quote:
                                 # Convert ValidatedQuote to dict format for compatibility
                                 quote = validated_quote.to_dict()
-                                logger.debug(
-                                    f"📊 {sym} Quote ({validated_quote.source}): {validated_quote.last_price:.2f}"
-                                )
-                                quote_breaker.record_success()
-                                reset_quote_backoff(sym)
+                                age_seconds = validated_quote.age_seconds
+                                is_stale = age_seconds > 60
+
+                                if is_stale:
+                                    # Using stale cache (offline mode) - don't count as failure
+                                    logger.debug(
+                                        f"📦 {sym} Quote (cached, offline mode): {validated_quote.last_price:.2f} (age: {age_seconds:.0f}s)"
+                                    )
+                                    # Don't record success or failure for stale cache - maintain circuit breaker state
+                                    reset_quote_backoff(sym)
+                                else:
+                                    # Fresh quote - count as success
+                                    logger.debug(
+                                        f"📊 {sym} Quote ({validated_quote.source}): {validated_quote.last_price:.2f}"
+                                    )
+                                    quote_breaker.record_success()
+                                    reset_quote_backoff(sym)
                             else:
+                                # No quote available (neither fresh nor cached)
                                 quote_breaker.record_failure()
                                 if sym not in ["BTC-USD", "ETH-USD", "USDT/USD"]:
-                                    logger.debug(f"⚠️ QuoteService failed to fetch quote for {sym}")
+                                    logger.debug(
+                                        f"⚠️ QuoteService failed to fetch quote for {sym} (no cache)"
+                                    )
                                 schedule_quote_backoff(sym)
                                 continue
                         except Exception as e:
@@ -3510,7 +3536,9 @@ def main():
                         validated_quote = quote_service.get_quote(test_symbol, max_age=60)
                         if validated_quote is None:
                             # Detailed error logging for troubleshooting
-                            logger.error(f"❌ quote_service.get_quote() returned None for {test_symbol}")
+                            logger.error(
+                                f"❌ quote_service.get_quote() returned None for {test_symbol}"
+                            )
                             logger.error("")
                             logger.error("   ALL quote sources failed:")
                             logger.error("   1. Alpaca API")
@@ -3520,14 +3548,20 @@ def main():
                             logger.error("   5. Yahoo Finance")
                             logger.error("")
                             logger.error("   Possible causes:")
-                            logger.error("   - API keys not set: Check ALPACA_API_KEY, FINNHUB_API_KEY, etc.")
+                            logger.error(
+                                "   - API keys not set: Check ALPACA_API_KEY, FINNHUB_API_KEY, etc."
+                            )
                             logger.error("   - Rate limits hit: Wait and retry")
                             logger.error("   - Network issues: Check Render connectivity")
                             logger.error("   - Symbol format: BTC-USD might not be recognized")
                             logger.error("")
                             logger.error("   Environment variables:")
-                            logger.error(f"     ALPACA_API_KEY: {'SET' if os.getenv('ALPACA_API_KEY') else 'NOT SET'}")
-                            logger.error(f"     NEOLIGHT_USE_ALPACA_QUOTES: {os.getenv('NEOLIGHT_USE_ALPACA_QUOTES')}")
+                            logger.error(
+                                f"     ALPACA_API_KEY: {'SET' if os.getenv('ALPACA_API_KEY') else 'NOT SET'}"
+                            )
+                            logger.error(
+                                f"     NEOLIGHT_USE_ALPACA_QUOTES: {os.getenv('NEOLIGHT_USE_ALPACA_QUOTES')}"
+                            )
 
                             # Mark as executed
                             state["test_trade_executed"] = True
@@ -3537,7 +3571,7 @@ def main():
                         # SUCCESS: Quote fetched
                         # ====================================================================
 
-                        logger.info(f"✅ Quote fetched successfully:")
+                        logger.info("✅ Quote fetched successfully:")
                         logger.info(f"   Symbol: {test_symbol}")
                         logger.info(f"   Price: ${validated_quote.last_price:,.2f}")
                         logger.info(f"   Source: {validated_quote.source}")
@@ -3557,7 +3591,9 @@ def main():
                                 state=state,
                             )
                             if test_price is None:
-                                error_msg = f"Invalid price from quote: {raw_price} ({type(raw_price)})"
+                                error_msg = (
+                                    f"Invalid price from quote: {raw_price} ({type(raw_price)})"
+                                )
                                 logger.error(f"❌ {error_msg}")
                                 raise ValueError(error_msg)
 
@@ -3577,9 +3613,7 @@ def main():
                         elif test_symbol == "ETH-USD":
                             test_qty = 0.01  # ETH equivalent
                         else:
-                            test_qty = max(
-                                0.001, 10.0 / test_price
-                            )  # $10 worth, minimum 0.001
+                            test_qty = max(0.001, 10.0 / test_price)  # $10 worth, minimum 0.001
 
                         # CRITICAL: Log exactly what we're passing to submit_order
                         logger.info(
@@ -3587,9 +3621,7 @@ def main():
                         )
 
                         try:
-                            result = broker.submit_order(
-                                test_symbol, "buy", test_qty, test_price
-                            )
+                            result = broker.submit_order(test_symbol, "buy", test_qty, test_price)
                             trade_breaker.record_success()  # Successful trade
                             state["last_trade"][test_symbol] = time.time()
                             state["trade_count"] += 1
@@ -3600,11 +3632,11 @@ def main():
                             logger.info("✅ TEST TRADE EXECUTED SUCCESSFULLY")
                             logger.info("=" * 80)
                             logger.info(f"   Symbol: {test_symbol}")
-                            logger.info(f"   Side: BUY")
+                            logger.info("   Side: BUY")
                             logger.info(f"   Price: ${test_price:,.2f}")
                             logger.info(f"   Quantity: {test_qty:.4f}")
                             logger.info(f"   Source: {validated_quote.source}")
-                            logger.info(f"   Mode: TEST")
+                            logger.info("   Mode: TEST")
                             logger.info("=" * 80)
 
                             print(
@@ -3648,8 +3680,7 @@ def main():
                             )
                             print(f"❌ Test trade error: {error_msg}", flush=True)
                             send_telegram(
-                                f"⚠️ Test trade skipped: {test_symbol}\n"
-                                f"📊 Reason: {error_msg}",
+                                f"⚠️ Test trade skipped: {test_symbol}\n" f"📊 Reason: {error_msg}",
                                 include_mode=True,
                                 state=state,
                             )
@@ -3667,16 +3698,16 @@ def main():
                                 state=state,
                             )
                     except Exception as e:
-                            logger.warning(f"⚠️ Test trade skipped: {test_symbol} - {e}")
-                            send_telegram(
-                                f"⚠️ Test trade skipped: {test_symbol}\n📊 Reason: {str(e)}",
-                                include_mode=True,
-                                state=state,
-                            )
+                        logger.warning(f"⚠️ Test trade skipped: {test_symbol} - {e}")
+                        send_telegram(
+                            f"⚠️ Test trade skipped: {test_symbol}\n📊 Reason: {str(e)}",
+                            include_mode=True,
+                            state=state,
+                        )
                     else:
                         # Fallback: Try to use quote_service if available, otherwise use broker.fetch_quote()
                         quote = None
-                        
+
                         # First, try to re-initialize quote_service if it's None but available
                         if not quote_service and HAS_QUOTE_SERVICE:
                             try:
@@ -3684,24 +3715,30 @@ def main():
                                 logger.info("✅ Re-initialized QuoteService for TEST_MODE fallback")
                             except Exception as e:
                                 logger.warning(f"⚠️ Failed to re-initialize QuoteService: {e}")
-                        
+
                         # Try quote_service first (if available)
                         if quote_service:
                             try:
                                 validated_quote = quote_service.get_quote(test_symbol, max_age=10)
                                 if validated_quote:
                                     quote = validated_quote.to_dict()
-                                    logger.debug(f"📊 {test_symbol} Quote ({validated_quote.source}): {validated_quote.last_price:.2f}")
+                                    logger.debug(
+                                        f"📊 {test_symbol} Quote ({validated_quote.source}): {validated_quote.last_price:.2f}"
+                                    )
                             except Exception as e:
                                 logger.warning(f"⚠️ QuoteService failed for {test_symbol}: {e}")
-                        
+
                         # If quote_service didn't work, try broker.fetch_quote() as fallback
                         if not quote:
-                            logger.debug(f"⚠️ QuoteService unavailable or failed, trying broker.fetch_quote() for {test_symbol}")
+                            logger.debug(
+                                f"⚠️ QuoteService unavailable or failed, trying broker.fetch_quote() for {test_symbol}"
+                            )
                             quote = broker.fetch_quote(test_symbol)
                             if quote:
-                                logger.debug(f"📊 {test_symbol} Quote (broker fallback): {quote.get('mid', quote.get('last', 'N/A'))}")
-                        
+                                logger.debug(
+                                    f"📊 {test_symbol} Quote (broker fallback): {quote.get('mid', quote.get('last', 'N/A'))}"
+                                )
+
                         if not quote:
                             logger.warning(
                                 f"⚠️ Could not fetch quote for test trade ({test_symbol}), skipping"

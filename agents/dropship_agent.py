@@ -10,12 +10,12 @@ import os
 import sys
 import time
 import traceback
-from datetime import timezone, datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional, Dict, List
+from typing import Any, Optional
 
 # Python 3.9 compatibility
-UTC = timezone.utc
+UTC = UTC
 
 try:
     import requests
@@ -25,7 +25,14 @@ except ImportError:
     HAS_REQUESTS = False
     print("[dropship_agent] Install requests: pip install requests")
 
-ROOT = Path(os.path.expanduser("~/neolight"))
+# Detect Render environment - use Render paths if in cloud
+RENDER_MODE = os.getenv("RENDER_MODE", "false").lower() == "true"
+
+if RENDER_MODE:
+    ROOT = Path("/opt/render/project/src")
+else:
+    ROOT = Path(os.path.expanduser("~/neolight"))
+
 # Ensure we can import from agents directory
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -98,7 +105,7 @@ except ImportError:
         "[dropship_agent] ⚠️ VERO protection not available (vero_protection.py missing)", flush=True
     )
 
-    def sanitize_product_for_ebay(product: Dict[str, Any]) -> Dict[str, Any]:
+    def sanitize_product_for_ebay(product: dict[str, Any]) -> dict[str, Any]:
         return product
 
 
@@ -127,7 +134,7 @@ except ImportError:
         pass
 
 
-def load_trending_products() -> List[Dict[str, Any]]:
+def load_trending_products() -> list[dict[str, Any]]:
     """Load trending products from knowledge integrator."""
     trending_file = STATE / "trending_products.json"
     if trending_file.exists():
@@ -138,7 +145,7 @@ def load_trending_products() -> List[Dict[str, Any]]:
     return []
 
 
-def find_cheap_supplier(product_name: str, keywords: List[str]) -> Optional[Dict[str, Any]]:
+def find_cheap_supplier(product_name: str, keywords: list[str]) -> Optional[dict[str, Any]]:
     """
     Find cheapest supplier for product (AliExpress, Alibaba, Temu via AutoDS).
     Uses AutoDS API to search suppliers safely.
@@ -187,7 +194,7 @@ def find_cheap_supplier(product_name: str, keywords: List[str]) -> Optional[Dict
     }
 
 
-def calculate_markup(cost: float, min_margin_pct: float = 30.0) -> Dict[str, float]:
+def calculate_markup(cost: float, min_margin_pct: float = 30.0) -> dict[str, float]:
     """Calculate selling price with markup."""
     # Target 30% minimum margin
     selling_price = cost * (1 + min_margin_pct / 100)
@@ -211,7 +218,7 @@ def calculate_markup(cost: float, min_margin_pct: float = 30.0) -> Dict[str, flo
     }
 
 
-def list_product_on_ebay(product_data: Dict[str, Any], pricing: Dict[str, float]) -> Optional[str]:
+def list_product_on_ebay(product_data: dict[str, Any], pricing: dict[str, float]) -> Optional[str]:
     """
     List product on eBay via AutoDS API (SAFE - uses middleware).
     Includes COMPREHENSIVE policy compliance to prevent account suspension.
@@ -378,7 +385,7 @@ def list_product_on_ebay(product_data: Dict[str, Any], pricing: Dict[str, float]
         return None
 
 
-def list_product_on_etsy(product_data: Dict[str, Any], pricing: Dict[str, float]) -> Optional[str]:
+def list_product_on_etsy(product_data: dict[str, Any], pricing: dict[str, float]) -> Optional[str]:
     """
     List product on Etsy via API.
     Requires Etsy API credentials (free seller account).
@@ -430,7 +437,9 @@ def list_product_on_etsy(product_data: Dict[str, Any], pricing: Dict[str, float]
         return None
 
 
-def list_product_on_mercari(product_data: Dict[str, Any], pricing: Dict[str, float]) -> Optional[str]:
+def list_product_on_mercari(
+    product_data: dict[str, Any], pricing: dict[str, float]
+) -> Optional[str]:
     """
     List product on Mercari via API.
     Note: Mercari doesn't have a public API, so this would require web automation or private API access.
@@ -457,7 +466,9 @@ def list_product_on_mercari(product_data: Dict[str, Any], pricing: Dict[str, flo
         return None
 
 
-def list_product_on_poshmark(product_data: Dict[str, Any], pricing: Dict[str, float]) -> Optional[str]:
+def list_product_on_poshmark(
+    product_data: dict[str, Any], pricing: dict[str, float]
+) -> Optional[str]:
     """
     List product on Poshmark via API.
     Note: Poshmark doesn't have a public API - requires web automation or private API.
@@ -480,7 +491,7 @@ def list_product_on_poshmark(product_data: Dict[str, Any], pricing: Dict[str, fl
 
 
 def list_product_on_tiktok_shop(
-    product_data: Dict[str, Any], pricing: Dict[str, float]
+    product_data: dict[str, Any], pricing: dict[str, float]
 ) -> Optional[str]:
     """
     List product on TikTok Shop via API.
@@ -539,7 +550,7 @@ def list_product_on_tiktok_shop(
         return None
 
 
-def list_product_on_shopify(product_data: Dict[str, Any], pricing: Dict[str, float]) -> bool:
+def list_product_on_shopify(product_data: dict[str, Any], pricing: dict[str, float]) -> bool:
     """List product on Shopify via API."""
     if not (SHOPIFY_API_KEY and SHOPIFY_PASSWORD and SHOPIFY_STORE):
         print("[dropship_agent] Shopify credentials missing - cannot list product", flush=True)
@@ -572,7 +583,7 @@ def list_product_on_shopify(product_data: Dict[str, Any], pricing: Dict[str, flo
         return False
 
 
-def auto_fulfill_order(order_id: str, customer_address: Dict[str, str]) -> bool:
+def auto_fulfill_order(order_id: str, customer_address: dict[str, str]) -> bool:
     """
     AUTONOMOUS FULFILLMENT: When customer buys, automatically:
     1. Order from supplier (AliExpress/Alibaba)
@@ -601,7 +612,7 @@ def auto_fulfill_order(order_id: str, customer_address: Dict[str, str]) -> bool:
     return True
 
 
-def monitor_orders() -> List[Dict[str, Any]]:
+def monitor_orders() -> list[dict[str, Any]]:
     """
     Monitor for new orders from eBay (via AutoDS) or Shopify.
     Returns list of orders with platform info.
@@ -631,8 +642,8 @@ def monitor_orders() -> List[Dict[str, Any]]:
 
 
 def list_product_multi_platform(
-    product_data: Dict[str, Any], pricing: Dict[str, float]
-) -> Dict[str, Optional[str]]:
+    product_data: dict[str, Any], pricing: dict[str, float]
+) -> dict[str, Optional[str]]:
     """
     List product on multiple platforms simultaneously.
     Returns dictionary of platform -> listing_id.

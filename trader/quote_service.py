@@ -83,7 +83,9 @@ class ValidatedQuote:
     @property
     def age_seconds(self) -> float:
         """Get quote age in seconds"""
-        return (datetime.now() - self.timestamp).total_seconds()
+        # Handle both timezone-aware and naive datetimes
+        now = datetime.now(self.timestamp.tzinfo) if self.timestamp.tzinfo else datetime.now()
+        return (now - self.timestamp).total_seconds()
 
     def is_stale(self, max_age: int = 60) -> bool:
         """Check if quote is stale"""
@@ -120,6 +122,13 @@ class QuoteService:
         self._error_count = 0
         self._validation_gates: dict[str, threading.Event] = {}
 
+        # Metrics tracking for offline behavior monitoring
+        self._cache_hits_fresh = 0
+        self._cache_hits_stale = 0
+        self._fetch_successes = 0
+        self._fetch_failures = 0
+        self._max_cache_age_seen = 0.0
+
         # API credentials
         self.alpaca_key = os.getenv("ALPACA_API_KEY")
         self.alpaca_secret = os.getenv("ALPACA_API_SECRET")
@@ -132,19 +141,59 @@ class QuoteService:
             "RAPIDAPI_KEY", "f89c81c096msh0e367842c4a9cedp172050jsn8f96a4f06504"
         )
 
-    def get_quote(self, symbol: str, max_age: int = 60) -> Optional[ValidatedQuote]:
+    def get_quote(
+        self, symbol: str, max_age: int = 60, use_stale_cache: bool = True
+    ) -> Optional[ValidatedQuote]:
         """
         Get validated quote (cached or fresh).
         Returns immutable quote guaranteed to have valid numeric prices.
+
+        Args:
+            symbol: Trading symbol
+            max_age: Maximum age in seconds for cached quotes
+            use_stale_cache: If True, use stale cache when offline (network failures)
         """
-        # Check cache first
+        # Check cache first (even if stale, useful when offline)
         with self._lock:
             cached = self._cache.get(symbol)
-            if cached and not cached.is_stale(max_age):
-                return cached  # Immutable, safe to return
+            if cached:
+                if not cached.is_stale(max_age):
+                    # Fresh cache hit
+                    self._cache_hits_fresh += 1
+                    return cached  # Fresh cache
+                elif use_stale_cache:
+                    # Stale but available - use it when offline
+                    self._cache_hits_stale += 1
+                    age_seconds = cached.age_seconds
+                    self._max_cache_age_seen = max(self._max_cache_age_seen, age_seconds)
+                    logger.debug(
+                        f"📦 Using stale cache for {symbol} (offline mode, age: {age_seconds:.0f}s)"
+                    )
+                    return cached
 
-        # Fetch fresh
-        return self._fetch_fresh(symbol)
+        # Try to fetch fresh (will fail gracefully if offline)
+        try:
+            fresh_quote = self._fetch_fresh(symbol)
+            if fresh_quote:
+                self._fetch_successes += 1
+                return fresh_quote
+            else:
+                self._fetch_failures += 1
+        except Exception as e:
+            # Network failure or API error - log and continue to stale cache fallback
+            logger.debug(f"⚠️ Fetch failed for {symbol}: {e}")
+            self._fetch_failures += 1
+            # Continue to stale cache fallback below
+
+        # If fetch failed and we have stale cache, return it (offline mode)
+        if use_stale_cache and cached:
+            age_seconds = cached.age_seconds
+            self._max_cache_age_seen = max(self._max_cache_age_seen, age_seconds)
+            logger.debug(f"🌐 Offline: Using stale cache for {symbol} (age: {age_seconds:.0f}s)")
+            return cached
+
+        # No cache and fetch failed
+        return None
 
     def _is_index_or_mutual_fund(self, symbol: str) -> bool:
         """Detect if symbol is likely an index or mutual fund (needs live data from RapidAPI)"""
@@ -712,6 +761,31 @@ class QuoteService:
 
             logger.debug(f"✅ Quote fetched: {symbol} @ ${quote.last_price:,.2f} ({source})")
             return quote
+
+    def get_metrics(self) -> dict[str, Any]:
+        """
+        Get metrics for offline behavior monitoring.
+
+        Returns:
+            dict with cache hits, fetch stats, and offline indicators
+        """
+        with self._lock:
+            total_cache_hits = self._cache_hits_fresh + self._cache_hits_stale
+            stale_cache_usage_rate = (
+                self._cache_hits_stale / total_cache_hits if total_cache_hits > 0 else 0.0
+            )
+
+            return {
+                "cache_hits_fresh": self._cache_hits_fresh,
+                "cache_hits_stale": self._cache_hits_stale,
+                "fetch_successes": self._fetch_successes,
+                "fetch_failures": self._fetch_failures,
+                "max_cache_age_seen": self._max_cache_age_seen,
+                "stale_cache_usage_rate": round(stale_cache_usage_rate, 4),
+                "total_cache_hits": total_cache_hits,
+                "cache_size": len(self._cache),
+                "cache_symbols": list(self._cache.keys()),
+            }
 
     def get_stats(self) -> dict[str, Any]:
         """Get diagnostic statistics"""

@@ -20,7 +20,11 @@ STATE = ROOT / "state"
 RUNTIME = ROOT / "runtime"
 LOGS = ROOT / "logs"
 
-DASHBOARD_URL = os.getenv("NEOLIGHT_DASHBOARD_URL", "http://localhost:8100")
+# Detect Render environment - disable dashboard on Render (no localhost)
+RENDER_MODE = os.getenv("RENDER_MODE", "false").lower() == "true"
+DASHBOARD_URL = os.getenv(
+    "NEOLIGHT_DASHBOARD_URL", "http://localhost:8100" if not RENDER_MODE else None
+)
 UPDATE_INTERVAL = int(os.getenv("CAPITAL_GOVERNOR_INTERVAL", "300"))  # 5 minutes
 MIN_ALLOCATION = float(os.getenv("CAPITAL_GOVERNOR_MIN_ALLOC", "0.05"))  # 5% minimum
 MAX_ALLOCATION = float(os.getenv("CAPITAL_GOVERNOR_MAX_ALLOC", "0.40"))  # 40% maximum
