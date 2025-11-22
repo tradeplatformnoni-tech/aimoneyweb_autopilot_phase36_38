@@ -16,16 +16,20 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 # Configuration
-ROOT = Path("/opt/render/project/src")
-if not ROOT.exists():
-    ROOT = Path(os.path.expanduser("~/neolight"))
+# In Render cloud environment, use Render paths only (no local fallback)
+RENDER_MODE = os.getenv("RENDER_MODE", "false").lower() == "true"
 
-# State directory - try Render path first, fallback to local
-STATE_DIR = ROOT / "state"
-if not STATE_DIR.exists() and Path(os.path.expanduser("~/neolight/state")).exists():
-    # If Render state doesn't exist but local does, use local for reading
-    # (Agents will write to Render state, but we can read from local for dashboard)
-    STATE_DIR = Path(os.path.expanduser("~/neolight/state"))
+if RENDER_MODE:
+    # Cloud environment - use Render paths only
+    ROOT = Path("/opt/render/project/src")
+    STATE_DIR = ROOT / "state"
+    # Create state directory if it doesn't exist (first run)
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+else:
+    # Local development - use local paths
+    ROOT = Path(os.path.expanduser("~/neolight"))
+    STATE_DIR = ROOT / "state"
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
 
 PORT = int(os.getenv("PORT", "8080"))
 
@@ -120,23 +124,23 @@ async def dashboard_home():
 async def get_trades():
     """Get trading transactions - reads from Render state or cloud-synced location"""
     pnl_file = STATE_DIR / "pnl_history.csv"
-    
+
     # If file doesn't exist, agents may still be generating data
     if not pnl_file.exists():
         return {
             "trades": [],
             "total": 0,
             "message": "No trades yet. smart_trader agent is generating data. Historical trades will appear as the agent executes trades. Check again in a few minutes.",
-            "agent_status": "running"  # Agents are running, just need time to generate data
+            "agent_status": "running",  # Agents are running, just need time to generate data
         }
-    
+
     try:
         import csv
 
         with open(pnl_file) as f:
             reader = csv.DictReader(f)
             trades = list(reader)
-        
+
         # Return last 50 trades (most recent)
         recent_trades = trades[-50:] if len(trades) > 50 else trades
         return {"trades": recent_trades, "total": len(trades)}
@@ -148,7 +152,7 @@ async def get_trades():
 async def get_betting_results():
     """Get sports betting results - reads from Render state"""
     results = {}
-    
+
     betting_file = STATE_DIR / "sports_paper_trades.json"
     bankroll_file = STATE_DIR / "sports_bankroll.json"
     predictions_file = STATE_DIR / "sports_predictions.json"
@@ -179,10 +183,12 @@ async def get_betting_results():
             results["predictions"] = []
     else:
         results["predictions"] = []
-    
+
     # Add message if no data
     if not results.get("history") and not results.get("predictions"):
-        results["message"] = "No betting data yet. sports_betting agent is running and will generate data. Historical data will appear as the agent processes predictions. Check again in 30-60 minutes."
+        results[
+            "message"
+        ] = "No betting data yet. sports_betting agent is running and will generate data. Historical data will appear as the agent processes predictions. Check again in 30-60 minutes."
         results["agent_status"] = "running"
 
     return results
@@ -355,39 +361,39 @@ def sync_state_from_cloud():
     try:
         rclone_remote = os.getenv("RCLONE_REMOTE", "")
         rclone_path = os.getenv("RCLONE_PATH", "neolight/state")
-        
+
         if not rclone_remote:
             print("⚠️ RCLONE_REMOTE not set, skipping state sync")
             return False
-        
+
         # Check if rclone is available
         import subprocess
-        result = subprocess.run(
-            ["which", "rclone"],
-            capture_output=True,
-            text=True
-        )
+
+        result = subprocess.run(["which", "rclone"], capture_output=True, text=True)
         if result.returncode != 0:
             print("⚠️ rclone not available, skipping state sync")
             return False
-        
+
         print(f"☁️ Syncing state from {rclone_remote}:{rclone_path}...")
-        
+
         # Sync state from cloud to Render state directory
         sync_result = subprocess.run(
             [
-                "rclone", "copy",
+                "rclone",
+                "copy",
                 f"{rclone_remote}:{rclone_path}",
                 str(STATE_DIR),
                 "--create-empty-src-dirs",
-                "--transfers", "4",
-                "--checkers", "8",
+                "--transfers",
+                "4",
+                "--checkers",
+                "8",
             ],
             capture_output=True,
             text=True,
-            timeout=60
+            timeout=60,
         )
-        
+
         if sync_result.returncode == 0:
             print("✅ State synced from cloud successfully")
             return True
@@ -407,7 +413,7 @@ async def startup_event():
     print("🚀 Starting NeoLight Multi-Agent Render Service...")
     print(f"📁 Root: {ROOT}")
     print(f"🌐 Port: {PORT}")
-    
+
     # Sync state from cloud on startup (if available)
     sync_state_from_cloud()
 
@@ -561,6 +567,7 @@ try:
         get_observability_summary,
         get_traces,
     )
+
     HAS_OBSERVABILITY = True
     print("[render_app] ✅ Observability module imported successfully", flush=True)
 except ImportError as e:
@@ -570,12 +577,13 @@ except Exception as e:
     HAS_OBSERVABILITY = False
     print(f"[render_app] ⚠️ Observability module error: {e}", flush=True)
     import traceback
+
     traceback.print_exc()
 
 
 if HAS_OBSERVABILITY:
     print("[render_app] ✅ Registering observability routes", flush=True)
-    
+
     @app.get("/observability/summary")
     async def get_observability_summary_endpoint():
         """Get observability summary."""
@@ -610,6 +618,107 @@ if HAS_OBSERVABILITY:
     async def get_prometheus_metrics():
         """Prometheus-compatible metrics endpoint."""
         return get_metrics()
+
+
+# QuoteService Metrics Endpoint
+@app.get("/metrics/quote-service")
+async def quote_service_metrics():
+    """
+    Get QuoteService metrics for offline behavior monitoring.
+
+    Returns metrics about cache usage, offline behavior, and quote fetching.
+    """
+    try:
+        from trader.quote_service import get_quote_service
+
+        quote_service = get_quote_service()
+        if quote_service:
+            metrics = quote_service.get_metrics()
+
+            # Add interpretation
+            is_offline = metrics.get("stale_cache_usage_rate", 0) > 0.5
+            max_age_hours = metrics.get("max_cache_age_seen", 0) / 3600
+
+            metrics["interpretation"] = {
+                "is_operating_offline": is_offline,
+                "max_cache_age_hours": round(max_age_hours, 2),
+                "status": (
+                    "offline"
+                    if is_offline
+                    else "online"
+                    if metrics.get("fetch_successes", 0) > 0
+                    else "unknown"
+                ),
+            }
+
+            return metrics
+        else:
+            return {"error": "QuoteService not initialized", "metrics": {}}
+    except Exception as e:
+        return {"error": str(e), "metrics": {}}
+
+
+@app.get("/test/offline-simulation")
+async def test_offline_simulation():
+    """
+    Simulate offline conditions and report cache usage.
+    For testing offline behavior in Render environment.
+    """
+    from datetime import datetime
+
+    from trader.quote_service import get_quote_service
+
+    results = {
+        "timestamp": datetime.now().isoformat(),
+        "tests": [],
+    }
+
+    quote_service = get_quote_service()
+    if not quote_service:
+        return {"error": "QuoteService not available", "results": results}
+
+    # Test each symbol with current cache state
+    symbols = ["BTC-USD", "ETH-USD", "SPY", "AAPL"]
+
+    for symbol in symbols:
+        try:
+            # Get quote (may use cache if available)
+            quote = quote_service.get_quote(symbol, use_stale_cache=True)
+
+            if quote:
+                results["tests"].append(
+                    {
+                        "symbol": symbol,
+                        "status": "SUCCESS",
+                        "price": quote.last_price,
+                        "age_seconds": round(quote.age_seconds, 1),
+                        "age_minutes": round(quote.age_seconds / 60, 1),
+                        "source": quote.source,
+                        "is_stale": quote.is_stale(60),
+                    }
+                )
+            else:
+                results["tests"].append(
+                    {
+                        "symbol": symbol,
+                        "status": "FAILED",
+                        "error": "No cache available, fetch failed",
+                    }
+                )
+        except Exception as e:
+            results["tests"].append(
+                {
+                    "symbol": symbol,
+                    "status": "ERROR",
+                    "error": str(e),
+                }
+            )
+
+    # Add overall metrics
+    metrics = quote_service.get_metrics()
+    results["overall_metrics"] = metrics
+
+    return results
 
 
 # Note: Render uses uvicorn command directly, so this block is for local testing only

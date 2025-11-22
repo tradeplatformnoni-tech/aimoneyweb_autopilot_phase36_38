@@ -19,7 +19,14 @@ except ImportError:
     requests = None
     print("[market_intelligence] Install requests: pip install requests")
 
-ROOT = Path(os.path.expanduser("~/neolight"))
+# Detect Render environment - use Render paths if in cloud
+RENDER_MODE = os.getenv("RENDER_MODE", "false").lower() == "true"
+
+if RENDER_MODE:
+    ROOT = Path("/opt/render/project/src")
+else:
+    ROOT = Path(os.path.expanduser("~/neolight"))
+
 STATE = ROOT / "state"
 RUNTIME = ROOT / "runtime"
 DATA = ROOT / "data"

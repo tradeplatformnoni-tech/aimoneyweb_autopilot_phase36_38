@@ -44,7 +44,14 @@ except ImportError:
     xgb = None
     print("[ml_pipeline] Optional: Install xgboost: pip install xgboost")
 
-ROOT = Path(os.path.expanduser("~/neolight"))
+# Detect Render environment - use Render paths if in cloud
+RENDER_MODE = os.getenv("RENDER_MODE", "false").lower() == "true"
+
+if RENDER_MODE:
+    ROOT = Path("/opt/render/project/src")
+else:
+    ROOT = Path(os.path.expanduser("~/neolight"))
+
 STATE = ROOT / "state"
 DATA = ROOT / "data"
 RUNTIME = ROOT / "runtime"

@@ -7,7 +7,14 @@ import random
 import time
 import traceback
 
-ROOT = os.path.expanduser("~/neolight")
+# Detect Render environment - use Render paths if in cloud
+RENDER_MODE = os.getenv("RENDER_MODE", "false").lower() == "true"
+
+if RENDER_MODE:
+    ROOT = "/opt/render/project/src"
+else:
+    ROOT = os.path.expanduser("~/neolight")
+
 ROOT_PATH = pathlib.Path(ROOT)
 STATE = ROOT_PATH / "state"
 RUNTIME = ROOT_PATH / "runtime"

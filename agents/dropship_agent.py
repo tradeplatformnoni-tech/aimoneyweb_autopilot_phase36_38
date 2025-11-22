@@ -25,7 +25,14 @@ except ImportError:
     HAS_REQUESTS = False
     print("[dropship_agent] Install requests: pip install requests")
 
-ROOT = Path(os.path.expanduser("~/neolight"))
+# Detect Render environment - use Render paths if in cloud
+RENDER_MODE = os.getenv("RENDER_MODE", "false").lower() == "true"
+
+if RENDER_MODE:
+    ROOT = Path("/opt/render/project/src")
+else:
+    ROOT = Path(os.path.expanduser("~/neolight"))
+
 # Ensure we can import from agents directory
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
